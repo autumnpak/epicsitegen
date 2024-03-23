@@ -1,5 +1,5 @@
 [package]
-name = "epic-site-gen"
+name = "epicsitegen"
 version = "0.1.0"
 edition = "2021"
 
