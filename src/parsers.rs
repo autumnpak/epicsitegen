@@ -15,17 +15,19 @@ pub fn escaped_string(input: &str) -> IResult<&str, &str> { escaped(is_not("\"")
 
 pub fn ident_start(input: &str) -> IResult<&str, &str> { alphanumeric1(input) }
 
-pub fn plain_text_no_open(input: &str) -> IResult<&str, String> {
-  let parsed = take_until1("{")(input)?;
-  Ok((parsed.0, parsed.1.to_string()))
+pub fn plain_text_no_open(input: &str) -> IResult<&str, TemplateElement> {
+  let (inputparsed, parsed) = take_until1("{")(input)?;
+  Ok((inputparsed, TemplateElement::PlainText(parsed.to_string())))
 }
 
-pub fn plain_text_open(input: &str) -> IResult<&str, String> {
-  let parsed = preceded(char('{'), take_until1("{%"))(input)?;
-  Ok((parsed.0, "{".to_string() + parsed.1))
+pub fn plain_text_open(input: &str) -> IResult<&str, TemplateElement> {
+  let (inputparsed, parsed) = preceded(char('{'), take_until1("{%"))(input)?;
+  Ok((inputparsed, TemplateElement::PlainTextWithOpen(parsed.to_string())))
 }
 
-pub fn plain_text(input: &str) -> IResult<&str, TemplateElement> { 
-  let parsed = many1(alt((plain_text_no_open, plain_text_open)))(input)?;
-  Ok((parsed.0, TemplateElement::PlainText(parsed.1.concat())))
+pub fn template_elements(input: &str) -> IResult<&str, Vec<TemplateElement>> {
+  many1(alt((
+        plain_text_no_open,
+        plain_text_open
+  )))(input)
 }
