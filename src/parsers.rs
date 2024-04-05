@@ -8,7 +8,6 @@ use nom::{
   bytes::complete::{escaped, is_not, take_until1},
   character::complete::{char, alphanumeric1},
 };
-
 use crate::template::{TemplateElement};
 
 pub fn escaped_string(input: &str) -> IResult<&str, &str> { escaped(is_not("\""), '\\', char('"'))(input) }
