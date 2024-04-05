@@ -14,13 +14,15 @@ fn accept(
 fn Just_plain_text() {
     accept("test test", "{}", "test test");
 }
-
 #[test]
 fn Just_plain_text_with_open_brace() {
     accept("test { test", "{}", "test { test");
 }
-
 #[test]
 fn Basic_replacement() {
-    accept("test {{wahoo}}", "{wahoo: \"yeah\"}", "test yeah");
+    accept("foo {{bar}}", "bar: test", "foo test");
+}
+#[test]
+fn Basic_replacement_2() {
+    accept("foo {{bar}} yay", "bar: test", "foo test yay");
 }
