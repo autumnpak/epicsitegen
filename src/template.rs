@@ -1,5 +1,6 @@
 use serde_yaml::{Value, Mapping};
 use crate::yaml::{lookup_yaml_map, tostr};
+use crate::parsers::parse_template_elements;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TemplateElement {
@@ -8,9 +9,11 @@ pub enum TemplateElement {
     Replace { identifier: String, pipe: Vec<String> }
 }
 
-pub enum TemplateError<'a> {
-    KeyNotPresent(&'a str),
-    SerialisationError(String)
+#[derive(Debug, PartialEq, Eq)]
+pub enum TemplateError {
+    KeyNotPresent(String),
+    ParseError(String),
+    SerialisationError(String),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -32,8 +35,8 @@ impl TemplateElement {
     }
 }
 
-pub fn render<'a>(elements: Vec<&'a TemplateElement>, params: &'a Mapping) -> Result<String, TemplateError<'a>> {
-    elements.iter().try_fold("".to_owned(), |acc, &ii| {
+pub fn render_elements<'a>(elements: &'a Vec<TemplateElement>, params: &'a Mapping) -> Result<String, TemplateError> {
+    elements.iter().try_fold("".to_owned(), |acc, ii| {
         match ii.render(params) {
             err @ Err(..) => err,
             Ok(result) => {
@@ -43,4 +46,11 @@ pub fn render<'a>(elements: Vec<&'a TemplateElement>, params: &'a Mapping) -> Re
             }
         }
     })
+}
+
+pub fn render<'a>(input: &'a str, params: &'a Mapping) -> Result<String, TemplateError> {
+    match parse_template_elements(input) {
+        Err(ee) => Err(TemplateError::ParseError(ee.to_string())),
+        Ok((_, elements)) => render_elements(&elements, params)
+    }
 }

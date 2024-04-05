@@ -1,9 +1,9 @@
 use serde_yaml::{Value, Mapping, to_string};
 use crate::template::{TemplateError};
 
-pub fn lookup_yaml_map<'a, 'b>(mapping: &'a Mapping, key: &'b str) -> Result<&'a Value, TemplateError<'b>> {
+pub fn lookup_yaml_map<'a, 'b>(mapping: &'a Mapping, key: &str) -> Result<&'a Value, TemplateError> {
     match mapping.get(key) {
-        None => Err(TemplateError::KeyNotPresent(key)),
+        None => Err(TemplateError::KeyNotPresent(key.to_owned())),
         Some(value) => Ok(value),
     }
 }

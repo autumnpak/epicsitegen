@@ -1,17 +1,26 @@
-use epicsitegen::parsers::plain_text;
-use epicsitegen::template::TemplateElement;
-use nom::{Parser, IResult, Err};
+use epicsitegen::template::render;
+use serde_yaml::{from_str, Mapping};
 
-fn parser_works(
-    parser: fn(&str) -> IResult<&str, TemplateElement>,
-    input: &str, 
-    leftover: &str, 
-    expected: TemplateElement)
+fn accept(
+    input: &str,
+    params: &str, 
+    expected: &str)
 {
-    assert_eq!(parser(input), Ok((leftover, expected)));
+    let pp: Mapping = from_str(params).expect(&"");
+    assert_eq!(Ok(expected.to_owned()), render(input, &pp));
 }
 
 #[test]
-fn basic() {
-    parser_works(plain_text, "yeah{no}{% }", "{% }", TemplateElement::PlainText("yeah{no}".to_string()));
+fn Just_plain_text() {
+    accept("test test", "{}", "test test");
+}
+
+#[test]
+fn Just_plain_text_with_open_brace() {
+    accept("test { test", "{}", "test { test");
+}
+
+#[test]
+fn Basic_replacement() {
+    accept("test {{wahoo}}", "{wahoo: \"yeah\"}", "test yeah");
 }
