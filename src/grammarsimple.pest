@@ -1,0 +1,6 @@
+file = _{ SOI ~ ast ~ EOI }
+ws = _{ " "|"\t"|"\n"|"\r" }
+ast = { (plain_text | replacement)* }
+ident = { ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "-" | "_")+ }
+replacement = { "{{" ~ ident ~ "}}" }
+plain_text = { (!"{" ~ ANY)+ }

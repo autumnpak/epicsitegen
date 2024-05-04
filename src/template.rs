@@ -1,6 +1,6 @@
 use serde_yaml::{Value, Mapping};
 use crate::yaml::{lookup_yaml_map, tostr};
-use crate::parsers::parse_template_elements;
+use crate::parsers::parse_template_string;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TemplateElement {
@@ -49,8 +49,8 @@ pub fn render_elements<'a>(elements: &'a Vec<TemplateElement>, params: &'a Mappi
 }
 
 pub fn render<'a>(input: &'a str, params: &'a Mapping) -> Result<String, TemplateError> {
-    match parse_template_elements(input) {
+    match parse_template_string(input) {
         Err(ee) => Err(TemplateError::ParseError(ee.to_string())),
-        Ok((_, elements)) => render_elements(&elements, params)
+        Ok(elements) => render_elements(&elements, params)
     }
 }

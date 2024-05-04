@@ -1,0 +1,16 @@
+WHITESPACE = _{ " "|"\t"|"\n"|"\r" }
+file = _{ SOI ~ ast ~ EOI }
+ast = { (plain_text | tag)+ }
+plain_text = { (!"{" ~ ANY)+ }
+field = { "." ~ ident }
+ident = { ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "-" | "_")+ }
+index = { "[" ~ ASCII_DIGIT+ ~ "]" }
+value = { ident ~ (field | index)* }
+tag = { "{" ~ (replacement | plain_text) }
+replacement = { "{" ~ value ~ "}}" }
+percent_tag = { "%" ~ (snippet) }
+filename = { (!" " ~ ANY)+ }
+file_at = { "@" ~ value }
+snippet = { "snippet" ~ (filename | file_at) ~ pipe* }
+pipe = { "|" ~ ident }
+
