@@ -3,4 +3,5 @@ ws = _{ " "|"\t"|"\n"|"\r" }
 ast = { (plain_text | replacement)* }
 ident = { ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "-" | "_")+ }
 replacement = { "{{" ~ ident ~ "}}" }
-plain_text = { (!"{" ~ ANY)+ }
+plain_text = { not_open_brace+ | ("{" ~ not_open_brace+) }
+not_open_brace = { !"{" ~ ANY }

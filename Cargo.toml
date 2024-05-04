@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 pest = "2.7.9"
 pest_derive = "2.7.9"
-serde_yaml = "0.9.34"
+yaml-rust2 = "0.8.0"

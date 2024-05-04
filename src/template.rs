@@ -1,5 +1,4 @@
-use serde_yaml::{Value, Mapping};
-use crate::yaml::{lookup_yaml_map, tostr};
+use crate::yaml::{lookup_yaml_map, tostr, YamlMap};
 use crate::parsers::parse_template_string;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -23,7 +22,7 @@ pub struct Pipe {
 }
 
 impl TemplateElement {
-    fn render<'a>(&'a self, params: &'a Mapping) -> Result<String, TemplateError> {
+    fn render<'a>(&'a self, params: &'a YamlMap) -> Result<String, TemplateError> {
         match self {
             TemplateElement::PlainText(text) => Ok(text.clone()),
             TemplateElement::PlainTextWithOpen(text) => Ok(String::from("{") + text.as_str()),
@@ -35,7 +34,7 @@ impl TemplateElement {
     }
 }
 
-pub fn render_elements<'a>(elements: &'a Vec<TemplateElement>, params: &'a Mapping) -> Result<String, TemplateError> {
+pub fn render_elements<'a>(elements: &'a Vec<TemplateElement>, params: &'a YamlMap) -> Result<String, TemplateError> {
     elements.iter().try_fold("".to_owned(), |acc, ii| {
         match ii.render(params) {
             err @ Err(..) => err,
@@ -48,7 +47,7 @@ pub fn render_elements<'a>(elements: &'a Vec<TemplateElement>, params: &'a Mappi
     })
 }
 
-pub fn render<'a>(input: &'a str, params: &'a Mapping) -> Result<String, TemplateError> {
+pub fn render<'a>(input: &'a str, params: &'a YamlMap) -> Result<String, TemplateError> {
     match parse_template_string(input) {
         Err(ee) => Err(TemplateError::ParseError(ee.to_string())),
         Ok(elements) => render_elements(&elements, params)
