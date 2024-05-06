@@ -1,11 +1,23 @@
-use crate::yaml::{lookup_yaml_map, tostr, YamlMap};
+use crate::yaml::{lookup_value, tostr, YamlMap};
 use crate::parsers::parse_template_string;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TemplateElement {
     PlainText(String),
     PlainTextWithOpen(String),
-    Replace { identifier: String, pipe: Vec<String> }
+    Replace { value: TemplateValue, pipe: Vec<String> }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct TemplateValue {
+    pub base: String,
+    pub accesses: Vec<TemplateValueAccess>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum TemplateValueAccess {
+    Field(String),
+    Index(usize)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -13,12 +25,16 @@ pub enum TemplateError {
     KeyNotPresent(String),
     ParseError(String),
     SerialisationError(String),
+    IndexOOB(String, usize),
+    FieldNotPresent(String, String),
+    IndexOnUnindexable(String, usize),
+    FieldOnUnfieldable(String, String),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Pipe {
-    name: String,
-    params: Vec<String>
+    pub name: String,
+    pub params: Vec<String>
 }
 
 impl TemplateElement {
@@ -26,8 +42,8 @@ impl TemplateElement {
         match self {
             TemplateElement::PlainText(text) => Ok(text.clone()),
             TemplateElement::PlainTextWithOpen(text) => Ok(String::from("{") + text.as_str()),
-            TemplateElement::Replace{identifier, ..} => {
-                let lookup = lookup_yaml_map(params, identifier)?;
+            TemplateElement::Replace{value, ..} => {
+                let lookup = lookup_value(value, params)?;
                 tostr(lookup)
             },
         }

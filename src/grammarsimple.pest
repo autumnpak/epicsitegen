@@ -1,7 +1,10 @@
 file = _{ SOI ~ ast ~ EOI }
-ws = _{ " "|"\t"|"\n"|"\r" }
+ws = _{ (" "|"\t"|"\n"|"\r")+ }
 ast = { (plain_text | replacement)* }
 ident = { ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "-" | "_")+ }
-replacement = { "{{" ~ ident ~ "}}" }
+field = { "." ~ ident }
+value = { ident ~ (field | index)* }
+index = { "[" ~ ASCII_DIGIT+ ~ "]" }
+replacement = { "{{" ~ ws? ~ value ~ ws? ~ "}}" }
 plain_text = { not_open_brace+ | ("{" ~ not_open_brace+) }
 not_open_brace = { !"{" ~ ANY }

@@ -8,17 +8,6 @@ fn accept(
 {
     let parsed = YamlLoader::load_from_str(params).unwrap();
     let doc = &parsed[0];
-    match doc {
-        Yaml::Hash(_) => println!("hash"),
-        Yaml::Array(_) => println!("array"),
-        Yaml::Real(_) => println!("real"),
-        Yaml::Integer(_) => println!("integer"),
-        Yaml::String(_) => println!("str"),
-        Yaml::Boolean(_) => println!("boolean"),
-        Yaml::Alias(_) => println!("alias"),
-        Yaml::Null => println!("null"),
-        Yaml::BadValue => println!("badvalue"),
-    }
     let pp: &Hash = doc.as_hash().expect("not a hash map?");
     assert_eq!(Ok(expected.to_owned()), render(input, &pp));
 }
@@ -38,4 +27,20 @@ fn Basic_replacement() {
 #[test]
 fn Basic_replacement_2() {
     accept("foo {{bar}} yay", "bar: test", "foo test yay");
+}
+#[test]
+fn Basic_replacement_with_spaces() {
+    accept("foo {{   bar  }} yay", "bar: test", "foo test yay");
+}
+#[test]
+fn Replacement_with_field_access() {
+    accept("foo {{bar.test}} yay", "bar: \n  test: something", "foo something yay");
+}
+#[test]
+fn Replacement_with_index_access() {
+    accept("foo {{bar[1]}} yay", "bar: [a, b, c, d]", "foo b yay");
+}
+#[test]
+fn Replacement_with_many_field_accesses() {
+    accept("foo {{bar.test.something.another}} yay", "bar: \n  test:\n    something:\n      another:\n        ok", "foo ok yay");
 }
