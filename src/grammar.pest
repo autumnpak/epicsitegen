@@ -1,15 +1,18 @@
 file = _{ SOI ~ ast ~ EOI }
 ws = _{ (" "|"\t"|"\n"|"\r")+ }
-ast = { (plain_text | replacement)* }
+ast = { (replacement | snippet | file_element | plain_text)* }
+value = { ident ~ (field | index)* }
 ident = { ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "-" | "_")+ }
 field = { "." ~ ident }
-value = { ident ~ (field | index)* }
-index = { "[" ~ ASCII_DIGIT+ ~ "]" }
-replacement = { "{{" ~ ws? ~ value ~ ws? ~ "}}" }
-plain_text = { not_open_brace+ | ("{" ~ not_open_brace+) }
+index = { "[" ~ numbers ~ "]" }
+numbers = { ASCII_DIGIT+ }
+replacement = { "{{" ~ ws? ~ value ~ ws? ~ pipes ~ "}}" }
+plain_text = { not_open_brace+ | ("{" ~ not_second_character+) }
 not_open_brace = { !"{" ~ ANY }
-snippet = { "{%" ~ ws? "snippet" ~ ws? ~ (filename | file_at) ~ ws? ~ pipes ~ "%}" }
+not_second_character = { !("{" | "@") ~ ANY }
+snippet = { "{%" ~ ws? ~ "snippet" ~ ws? ~ (file_at | filename) ~ ws? ~ pipes ~ "%}" }
+file_element = { "{%" ~ ws? ~ "file" ~ ws? ~ (file_at | filename) ~ ws? ~ pipes ~ "%}" }
 filename = { (!" " ~ ANY)+ }
 file_at = { "@" ~ ws? ~ value }
-pipes = { ("|" ~ ws? ~ ident ~ ws?)* }
+pipes = { ("|" ~ ws? ~ (ASCII_ALPHANUMERIC+ ~ ws?)+ )* }
 

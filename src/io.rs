@@ -3,12 +3,13 @@ use std::collections::hash_map::Entry;
 use std::path::Path;
 use std::fs;
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum FileError {
     FileNotFound(String),
     FileCantBeRead(String),
 }
 
-trait ReadsFiles {
+pub trait ReadsFiles {
     fn read(&mut self, filename: &str) -> Result<&str, FileError>;
 }
 

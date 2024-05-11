@@ -9,7 +9,7 @@ use pest::{
 use pest_derive::Parser;
 
 #[derive(Parser)]
-#[grammar = "grammarsimple.pest"]
+#[grammar = "grammar.pest"]
 struct TemplateParser;
 
 fn parse_ast_node(pair: Pair<Rule>) -> TemplateElement {
@@ -18,7 +18,25 @@ fn parse_ast_node(pair: Pair<Rule>) -> TemplateElement {
     Rule::replacement => TemplateElement::Replace {
       value: parse_value(pair.into_inner().next().unwrap()), pipe: vec!() 
     },
+    Rule::snippet => parse_file_element(true, pair.into_inner().next().unwrap()),
+    Rule::file_element => parse_file_element(false, pair.into_inner().next().unwrap()),
     _ => unreachable!(),
+  }
+}
+
+fn parse_file_element(snippet: bool, pair: Pair<Rule>) -> TemplateElement {
+  match pair.as_rule() {
+    Rule::filename => TemplateElement::File{
+      snippet,
+      filename: pair.as_str().to_string(),
+      pipe: vec!()
+    },
+    Rule::file_at => TemplateElement::FileAt{
+      snippet,
+      value: parse_value(pair.into_inner().next().unwrap()),
+      pipe: vec!()
+    },
+    _ => unreachable!()
   }
 }
 
@@ -41,6 +59,5 @@ fn parse_value(pair: Pair<Rule>) -> TemplateValue {
 pub fn parse_template_string(input: &str) -> Result<Vec<TemplateElement>, Error<Rule>> {
     let mut parsed = TemplateParser::parse(Rule::file, input)?;
     let ast = parsed.next().unwrap(); //never fails
-
     Ok(ast.into_inner().map(parse_ast_node).collect())
 }
