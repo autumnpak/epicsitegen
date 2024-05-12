@@ -1,6 +1,6 @@
 file = _{ SOI ~ ast ~ EOI }
 ws = _{ (" "|"\t"|"\n"|"\r")+ }
-ast = { (replacement | snippet | file_element | plain_text)* }
+ast = { (replacement | snippet | file_element | if_exists | plain_text)* }
 value = { ident ~ (field | index)* }
 ident = { ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "-" | "_")+ }
 field = { "." ~ ident }
@@ -9,10 +9,12 @@ numbers = { ASCII_DIGIT+ }
 replacement = { "{{" ~ ws? ~ value ~ ws? ~ pipes ~ "}}" }
 plain_text = { not_open_brace+ | ("{" ~ not_second_character+) }
 not_open_brace = { !"{" ~ ANY }
-not_second_character = { !("{" | "@") ~ ANY }
+not_second_character = { !("{" | "%") ~ ANY }
 snippet = { "{%" ~ ws? ~ "snippet" ~ ws? ~ (file_at | filename) ~ ws? ~ pipes ~ "%}" }
 file_element = { "{%" ~ ws? ~ "file" ~ ws? ~ (file_at | filename) ~ ws? ~ pipes ~ "%}" }
 filename = { (!" " ~ ANY)+ }
 file_at = { "@" ~ ws? ~ value }
 pipes = { ("|" ~ ws? ~ (ASCII_ALPHANUMERIC+ ~ ws?)+ )* }
-
+if_exists = { "{%" ~ ws? ~ "if-exists" ~ ws? ~ value ~ ws? ~ "%}" ~ ws? ~ ast ~ if_exists_else? ~ if_exists_end }
+if_exists_else = { "{%" ~ ws? ~ "else" ~ ws? ~ "%}" ~ ws? ~ ast }
+if_exists_end = { "{%" ~ ws? ~ "endif" ~ ws? ~ "%}" }

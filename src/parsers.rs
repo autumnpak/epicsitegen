@@ -2,7 +2,7 @@ use crate::template::{
   TemplateElement, TemplateValue, TemplateValueAccess
 };
 use pest::{
-  iterators::Pair,
+  iterators::{Pair, Pairs},
   error::Error,
   Parser
 };
@@ -20,7 +20,8 @@ fn parse_ast_node(pair: Pair<Rule>) -> TemplateElement {
     },
     Rule::snippet => parse_file_element(true, pair.into_inner().next().unwrap()),
     Rule::file_element => parse_file_element(false, pair.into_inner().next().unwrap()),
-    _ => unreachable!(),
+    Rule::if_exists => parse_if_exists_element(&mut pair.into_inner()),
+    _ => unreachable!("parse ast node"),
   }
 }
 
@@ -36,8 +37,18 @@ fn parse_file_element(snippet: bool, pair: Pair<Rule>) -> TemplateElement {
       value: parse_value(pair.into_inner().next().unwrap()),
       pipe: vec!()
     },
-    _ => unreachable!()
+    _ => unreachable!("parse file element")
   }
+}
+
+fn parse_if_exists_element(pairs: &mut Pairs<Rule>) -> TemplateElement {
+  let test = parse_value(pairs.next().unwrap());
+  let when_true = pairs.next().expect("e true").into_inner().map(parse_ast_node).collect();
+  let when_false = match pairs.next().expect("e false").into_inner().next() {
+    None => vec![],
+    Some(ss) => ss.into_inner().map(parse_ast_node).collect(),
+  };
+  TemplateElement::IfExists{value: test, when_true, when_false}
 }
 
 fn parse_value(pair: Pair<Rule>) -> TemplateValue {
@@ -52,7 +63,7 @@ fn parse_value(pair: Pair<Rule>) -> TemplateValue {
       }).collect();
       TemplateValue{ base: name, accesses }
     }
-    _ => unreachable!(),
+    _ => unreachable!("parse valye"),
   }
 }
 

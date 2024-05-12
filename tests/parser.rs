@@ -86,3 +86,19 @@ fn basic_file() {
 fn basic_file_at() {
     accept("foo {% file @ filename %} yay", "filename: bbb.txt", "foo banana yay");
 }
+#[test]
+fn if_exists_true() {
+    accept("foo {% if-exists filename %}bar{% endif %} yay", "filename: bbb.txt", "foo bar yay");
+}
+#[test]
+fn if_exists_true_else() {
+    accept("foo {% if-exists filename %}bar{% else %}something{% endif %} yay", "filename: bbb.txt", "foo bar yay");
+}
+#[test]
+fn if_exists_false() {
+    accept("foo {% if-exists erm %}bar{% endif %} yay", "filename: bbb.txt", "foo  yay");
+}
+#[test]
+fn if_exists_false_else() {
+    accept("foo {% if-exists erm %}bar{% else %}something{% endif %} yay", "filename: bbb.txt", "foo something yay");
+}

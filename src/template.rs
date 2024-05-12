@@ -8,6 +8,7 @@ pub enum TemplateElement {
     Replace { value: TemplateValue, pipe: Vec<String> },
     File { snippet: bool, filename: String, pipe: Vec<String> },
     FileAt { snippet: bool, value: TemplateValue, pipe: Vec<String> },
+    IfExists { value: TemplateValue, when_true: Vec<TemplateElement>, when_false: Vec<TemplateElement> },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -62,6 +63,18 @@ impl TemplateElement {
                 match io.read(&realFilename) {
                     Ok(strr) => Ok(strr.to_owned()),
                     Err(ee) => Err(TemplateError::FileError(ee))
+                }
+            }
+            TemplateElement::IfExists{value, when_true, when_false} => {
+                let lookup = lookup_value(value, params);
+                match lookup {
+                    Ok(..) => render_elements(when_true, params, io),
+                    Err(ee) => match ee {
+                        TemplateError::KeyNotPresent(..) |
+                        TemplateError::FieldNotPresent(..) |
+                        TemplateError::IndexOOB(..) => render_elements(when_false, params, io),
+                        _ => Err(ee)
+                    }
                 }
             }
         }
