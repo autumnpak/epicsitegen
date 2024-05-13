@@ -1,4 +1,4 @@
-use epicsitegen::template::render;
+use epicsitegen::template::{{render, TemplateError}};
 use epicsitegen::io::{ReadsFiles, FileError};
 use yaml_rust2::{yaml::{Hash, Yaml}, YamlLoader};
 use std::collections::HashMap;
@@ -35,7 +35,28 @@ fn accept(
     let parsed = YamlLoader::load_from_str(params).unwrap();
     let doc = &parsed[0];
     let pp: &Hash = doc.as_hash().expect("not a hash map?");
-    assert_eq!(Ok(expected.to_owned()), render(input, &pp, &mut setup_io()));
+    let render = render(input, &pp, &mut setup_io());
+    match render {
+        Err(TemplateError::ParseError(ref ee)) => println!("{}", ee),
+        _ => ()
+    }
+    assert_eq!(Ok(expected.to_owned()), render);
+}
+
+fn reject(
+    input: &str,
+    params: &str,
+    expected: TemplateError)
+{
+    let parsed = YamlLoader::load_from_str(params).unwrap();
+    let doc = &parsed[0];
+    let pp: &Hash = doc.as_hash().expect("not a hash map?");
+    let render = render(input, &pp, &mut setup_io());
+    match render {
+        Err(TemplateError::ParseError(ref ee)) => println!("{}", ee),
+        _ => ()
+    }
+    assert_eq!(Err(expected), render);
 }
 
 #[test]
@@ -101,4 +122,8 @@ fn if_exists_false() {
 #[test]
 fn if_exists_false_else() {
     accept("foo {% if-exists erm %}bar{% else %}something{% endif %} yay", "filename: bbb.txt", "foo something yay");
+}
+#[test]
+fn for_loop_basic() {
+    accept("foo {% for it in numbers %}{{it}} {% endfor %}yay", "numbers: [2, 4, 6]", "foo 2 4 6 yay");
 }

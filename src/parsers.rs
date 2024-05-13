@@ -21,6 +21,7 @@ fn parse_ast_node(pair: Pair<Rule>) -> TemplateElement {
     Rule::snippet => parse_file_element(true, pair.into_inner().next().unwrap()),
     Rule::file_element => parse_file_element(false, pair.into_inner().next().unwrap()),
     Rule::if_exists => parse_if_exists_element(&mut pair.into_inner()),
+    Rule::for_element => parse_for_element(&mut pair.into_inner()),
     _ => unreachable!("parse ast node"),
   }
 }
@@ -39,6 +40,17 @@ fn parse_file_element(snippet: bool, pair: Pair<Rule>) -> TemplateElement {
     },
     _ => unreachable!("parse file element")
   }
+}
+
+fn parse_for_element(pairs: &mut Pairs<Rule>) -> TemplateElement {
+  let name = pairs.next().unwrap().as_str().to_string();
+  let value = parse_value(pairs.next().unwrap());
+  let main = pairs.next().expect("e true").into_inner().map(parse_ast_node).collect();
+  let separator = match pairs.next().expect("e false").into_inner().next() {
+    None => vec![],
+    Some(ss) => ss.into_inner().map(parse_ast_node).collect(),
+  };
+  TemplateElement::For{name, value, main, separator}
 }
 
 fn parse_if_exists_element(pairs: &mut Pairs<Rule>) -> TemplateElement {

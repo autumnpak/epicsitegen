@@ -1,6 +1,7 @@
-use crate::yaml::{lookup_value, tostr, YamlMap};
+use crate::yaml::{lookup_value, tostr, YamlMap, to_iterable, insert_value};
 use crate::parsers::parse_template_string;
 use crate::io::{ReadsFiles, FileError};
+use crate::utils::{map_m};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TemplateElement {
@@ -8,7 +9,17 @@ pub enum TemplateElement {
     Replace { value: TemplateValue, pipe: Vec<String> },
     File { snippet: bool, filename: String, pipe: Vec<String> },
     FileAt { snippet: bool, value: TemplateValue, pipe: Vec<String> },
-    IfExists { value: TemplateValue, when_true: Vec<TemplateElement>, when_false: Vec<TemplateElement> },
+    IfExists {
+        value: TemplateValue,
+        when_true: Vec<TemplateElement>,
+        when_false: Vec<TemplateElement>
+    },
+    For {
+        name: String,
+        value: TemplateValue,
+        main: Vec<TemplateElement>,
+        separator: Vec<TemplateElement>
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -33,6 +44,7 @@ pub enum TemplateError {
     IndexOnUnindexable(String, usize),
     FieldOnUnfieldable(String, String),
     FileError(FileError),
+    ForOnUnindexable(String),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -50,8 +62,8 @@ impl TemplateElement {
                 tostr(lookup)
             },
             TemplateElement::File{snippet, filename, ..} => {
-                let realFilename = format!("{}{}", if *snippet {"resources/snippets/"} else {""}, filename);
-                match io.read(&realFilename) {
+                let real_filename = format!("{}{}", if *snippet {"resources/snippets/"} else {""}, filename);
+                match io.read(&real_filename) {
                     Ok(strr) => Ok(strr.to_owned()),
                     Err(ee) => Err(TemplateError::FileError(ee))
                 }
@@ -59,8 +71,8 @@ impl TemplateElement {
             TemplateElement::FileAt{snippet, value, ..} => {
                 let lookup = lookup_value(value, params)?;
                 let filename = tostr(lookup)?;
-                let realFilename = format!("{}{}", if *snippet {"resources/snippets/"} else {""}, filename);
-                match io.read(&realFilename) {
+                let real_filename = format!("{}{}", if *snippet {"resources/snippets/"} else {""}, filename);
+                match io.read(&real_filename) {
                     Ok(strr) => Ok(strr.to_owned()),
                     Err(ee) => Err(TemplateError::FileError(ee))
                 }
@@ -76,6 +88,17 @@ impl TemplateElement {
                         _ => Err(ee)
                     }
                 }
+            }
+            TemplateElement::For{name, value, main, separator} => {
+                let lookup = lookup_value(value, params)?;
+                let as_vec = to_iterable(lookup)?;
+                let mapped: Vec<String> = map_m(&as_vec, |ii| {
+                    let mut new_params = params.clone();
+                    insert_value(&mut new_params, &name, ii.clone());
+                    render_elements(main, &new_params, io)
+                })?;
+                let sep = render_elements(separator, params, io)?;
+                Ok(mapped.join(&sep))
             }
         }
     }
