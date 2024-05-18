@@ -1,16 +1,16 @@
 use crate::yaml::{
     lookup_value,
     tostr,
-    YamlValue,
     YamlMap,
     to_iterable,
     insert_value,
-    new_yaml_map,
 };
 use crate::parsers::parse_template_string;
 use crate::io::{ReadsFiles, FileError};
 use crate::utils::{map_m};
-use std::collections::HashMap;
+use crate::pipes::{
+    Pipe, PipeMap, execute_pipe
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TemplateElement {
@@ -44,12 +44,6 @@ pub enum TemplateValueAccess {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Pipe {
-    pub name: String,
-    pub params: Vec<String>
-}
-
-#[derive(Debug, PartialEq, Eq)]
 pub enum TemplateError {
     KeyNotPresent(String),
     ParseError(String),
@@ -63,46 +57,6 @@ pub enum TemplateError {
     PipeMissing(String),
     PipeExecutionError(String),
 }
-
-pub enum PipeDefinition {
-    Template(Vec<TemplateElement>),
-    /*Fn(
-        fn (
-            input: &YamlValue,
-            pipemap: &PipeMap,
-            io: &mut impl ReadsFiles
-        ) -> Result<YamlValue, String>
-    )*/
-}
-
-pub type PipeMap = HashMap<String, PipeDefinition>;
-pub fn new_pipe_map() -> PipeMap { HashMap::new() }
-
-fn execute_pipe<'a>(value: &'a YamlValue, pipe: &str, pipemap: &'a PipeMap, io: &mut impl ReadsFiles) -> Result<YamlValue, TemplateError> {
-    let mut map = new_yaml_map();
-    let params_map = match value {
-        YamlValue::Hash(map) => map,
-         _ => {
-            map.insert(YamlValue::String("it".to_owned()), value.clone());
-            &map
-        }
-    };
-    //let input = YamlValue::Hash(params_map.clone());
-    match pipemap.get(pipe) {
-        Some(PipeDefinition::Template(elements)) => {
-            let rendered = render_elements(elements, params_map, pipemap, io)?;
-            Ok(YamlValue::String(rendered))
-        },
-        /*Some(PipeDefinition::Fn(func)) => {
-            match func(value, pipemap, io) {
-                Ok(strr) => Ok(YamlValue::String(strr)),
-                Err(ee) => Err(TemplateError::PipeExecutionError(ee))
-            }
-        },*/
-        None => Err(TemplateError::PipeMissing(pipe.to_owned()))
-    }
-}
-
 impl TemplateElement {
     fn render<'a>(&'a self, params: &'a YamlMap, pipes: &'a PipeMap, io: &mut impl ReadsFiles) -> Result<String, TemplateError> {
         match self {

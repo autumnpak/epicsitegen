@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::path::Path;
 use std::fs;
+use std::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum FileError {
@@ -11,6 +12,16 @@ pub enum FileError {
 
 pub trait ReadsFiles {
     fn read(&mut self, filename: &str) -> Result<&str, FileError>;
+}
+
+//thing we need because we can't use 'impl ReadsFiles' in PipeDefinition's type definition
+pub struct ReadsFilesImpl<'a> {
+    pub read: &'a dyn FnMut(&'a str) -> Result<String, FileError>
+}
+impl<'a> fmt::Display for ReadsFilesImpl<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "reads files impl",)
+    }
 }
 
 pub struct FileCache {

@@ -1,4 +1,5 @@
-use epicsitegen::template::{render, TemplateError, PipeMap, PipeDefinition, new_pipe_map};
+use epicsitegen::template::{render, TemplateError};
+use epicsitegen::pipes::{PipeMap, PipeDefinition, new_pipe_map};
 use epicsitegen::parsers::{parse_template_string};
 use epicsitegen::io::{ReadsFiles, FileError};
 use yaml_rust2::{yaml::{Hash, Yaml}, YamlLoader};
@@ -33,6 +34,7 @@ fn setup_pipes() -> PipeMap {
     pipemap.insert("test0".to_string(), PipeDefinition::Template(parse_template_string("um1").unwrap()));
     pipemap.insert("test1".to_string(), PipeDefinition::Template(parse_template_string("um2 {{it}}").unwrap()));
     pipemap.insert("test2".to_string(), PipeDefinition::Template(parse_template_string("um3 {{nah}}").unwrap()));
+    pipemap.insert("testfn".to_string(), PipeDefinition::Fn(|input, pipes, io| Ok(Yaml::String("bleh".to_owned()))));
     pipemap
 }
 
@@ -137,14 +139,18 @@ fn for_loop_basic() {
     accept("foo {% for it in numbers %}{{it}} {% endfor %}yay", "numbers: [2, 4, 6]", "foo 2 4 6 yay");
 }
 #[test]
-fn replacement_with_pipe_1() {
+fn replacement_with_template_pipe_1() {
     accept("foo {{bar | test0}} yay", "bar: test", "foo um1 yay");
 }
 #[test]
-fn replacement_with_pipe_2() {
+fn replacement_with_pipe_template_2() {
     accept("foo {{bar | test1}} yay", "bar: test", "foo um2 test yay");
 }
 #[test]
-fn replacement_with_pipe_3() {
+fn replacement_with_pipe_template_3() {
     accept("foo {{bar | test2}} yay", "bar: {nah: yeah}", "foo um3 yeah yay");
+}
+#[test]
+fn replacement_with_function_pipe_1() {
+    accept("foo {{bar | testfn}} yay", "bar: {nah: yeah}", "foo bleh yay");
 }

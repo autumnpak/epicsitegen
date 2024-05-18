@@ -1,5 +1,8 @@
 use crate::template::{
-  TemplateElement, TemplateValue, TemplateValueAccess, Pipe
+  TemplateElement, TemplateValue, TemplateValueAccess
+};
+use crate::pipes::{
+  Pipe
 };
 use pest::{
   iterators::{Pair, Pairs},
