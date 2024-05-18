@@ -1,5 +1,5 @@
 use crate::template::{
-  TemplateElement, TemplateValue, TemplateValueAccess
+  TemplateElement, TemplateValue, TemplateValueAccess, Pipe
 };
 use pest::{
   iterators::{Pair, Pairs},
@@ -15,28 +15,37 @@ struct TemplateParser;
 fn parse_ast_node(pair: Pair<Rule>) -> TemplateElement {
   match pair.as_rule() {
     Rule::plain_text => TemplateElement::PlainText(pair.as_str().to_string()),
-    Rule::replacement => TemplateElement::Replace {
-      value: parse_value(pair.into_inner().next().unwrap()), pipe: vec!() 
-    },
-    Rule::snippet => parse_file_element(true, pair.into_inner().next().unwrap()),
-    Rule::file_element => parse_file_element(false, pair.into_inner().next().unwrap()),
+    Rule::replacement => {
+      let mut iter = pair.into_inner();
+      TemplateElement::Replace {
+        value: parse_value(iter.next().unwrap()),
+        pipe: parse_pipes(&mut iter.next().unwrap().into_inner()) 
+      }
+    } ,
+    Rule::snippet => parse_file_element(true, &mut pair.into_inner()),
+    Rule::file_element => parse_file_element(false, &mut pair.into_inner()),
     Rule::if_exists => parse_if_exists_element(&mut pair.into_inner()),
     Rule::for_element => parse_for_element(&mut pair.into_inner()),
     _ => unreachable!("parse ast node"),
   }
 }
 
-fn parse_file_element(snippet: bool, pair: Pair<Rule>) -> TemplateElement {
-  match pair.as_rule() {
-    Rule::filename => TemplateElement::File{
-      snippet,
-      filename: pair.as_str().to_string(),
-      pipe: vec!()
+fn parse_file_element(snippet: bool, pair: &mut Pairs<Rule>) -> TemplateElement {
+  let filename = pair.next().unwrap();
+  match filename.as_rule() {
+    Rule::filename => {
+      TemplateElement::File{
+        snippet,
+        filename: filename.as_str().to_string(),
+        pipe: parse_pipes(&mut pair.next().unwrap().into_inner())
+      }
     },
-    Rule::file_at => TemplateElement::FileAt{
-      snippet,
-      value: parse_value(pair.into_inner().next().unwrap()),
-      pipe: vec!()
+    Rule::file_at => {
+      TemplateElement::FileAt{
+        snippet,
+        value: parse_value(filename.into_inner().next().unwrap()),
+        pipe: parse_pipes(&mut pair.next().unwrap().into_inner())
+      }
     },
     _ => unreachable!("parse file element")
   }
@@ -63,6 +72,15 @@ fn parse_if_exists_element(pairs: &mut Pairs<Rule>) -> TemplateElement {
   TemplateElement::IfExists{value: test, when_true, when_false}
 }
 
+fn parse_pipes(pairs: &mut Pairs<Rule>) -> Vec<Pipe> {
+  fn parse_pipe(pairs: &mut Pairs<Rule>) -> Pipe {
+    let name = pairs.next().unwrap().as_str().to_owned();
+    let params = pairs.map(|ii| ii.as_str().to_owned()).collect();
+    Pipe{name, params}
+  }
+  pairs.map(|xx| parse_pipe(&mut xx.into_inner())).collect()
+}
+
 fn parse_value(pair: Pair<Rule>) -> TemplateValue {
   match pair.as_rule() {
     Rule::value => {
@@ -75,7 +93,7 @@ fn parse_value(pair: Pair<Rule>) -> TemplateValue {
       }).collect();
       TemplateValue{ base: name, accesses }
     }
-    _ => unreachable!("parse valye"),
+    _ => unreachable!("parse value"),
   }
 }
 

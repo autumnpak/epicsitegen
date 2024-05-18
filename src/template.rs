@@ -1,14 +1,23 @@
-use crate::yaml::{lookup_value, tostr, YamlMap, to_iterable, insert_value};
+use crate::yaml::{
+    lookup_value,
+    tostr,
+    YamlValue,
+    YamlMap,
+    to_iterable,
+    insert_value,
+    new_yaml_map,
+};
 use crate::parsers::parse_template_string;
 use crate::io::{ReadsFiles, FileError};
 use crate::utils::{map_m};
+use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TemplateElement {
     PlainText(String),
-    Replace { value: TemplateValue, pipe: Vec<String> },
-    File { snippet: bool, filename: String, pipe: Vec<String> },
-    FileAt { snippet: bool, value: TemplateValue, pipe: Vec<String> },
+    Replace { value: TemplateValue, pipe: Vec<Pipe> },
+    File { snippet: bool, filename: String, pipe: Vec<Pipe> },
+    FileAt { snippet: bool, value: TemplateValue, pipe: Vec<Pipe> },
     IfExists {
         value: TemplateValue,
         when_true: Vec<TemplateElement>,
@@ -35,6 +44,12 @@ pub enum TemplateValueAccess {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub struct Pipe {
+    pub name: String,
+    pub params: Vec<String>
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum TemplateError {
     KeyNotPresent(String),
     ParseError(String),
@@ -45,30 +60,69 @@ pub enum TemplateError {
     FieldOnUnfieldable(String, String),
     FileError(FileError),
     ForOnUnindexable(String),
+    PipeMissing(String),
+    PipeExecutionError(String),
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct Pipe {
-    pub name: String,
-    pub params: Vec<String>
+pub enum PipeDefinition {
+    Template(Vec<TemplateElement>),
+    /*Fn(
+        fn (
+            input: &YamlValue,
+            pipemap: &PipeMap,
+            io: &mut impl ReadsFiles
+        ) -> Result<YamlValue, String>
+    )*/
+}
+
+pub type PipeMap = HashMap<String, PipeDefinition>;
+pub fn new_pipe_map() -> PipeMap { HashMap::new() }
+
+fn execute_pipe<'a>(value: &'a YamlValue, pipe: &str, pipemap: &'a PipeMap, io: &mut impl ReadsFiles) -> Result<YamlValue, TemplateError> {
+    let mut map = new_yaml_map();
+    let params_map = match value {
+        YamlValue::Hash(map) => map,
+         _ => {
+            map.insert(YamlValue::String("it".to_owned()), value.clone());
+            &map
+        }
+    };
+    //let input = YamlValue::Hash(params_map.clone());
+    match pipemap.get(pipe) {
+        Some(PipeDefinition::Template(elements)) => {
+            let rendered = render_elements(elements, params_map, pipemap, io)?;
+            Ok(YamlValue::String(rendered))
+        },
+        /*Some(PipeDefinition::Fn(func)) => {
+            match func(value, pipemap, io) {
+                Ok(strr) => Ok(YamlValue::String(strr)),
+                Err(ee) => Err(TemplateError::PipeExecutionError(ee))
+            }
+        },*/
+        None => Err(TemplateError::PipeMissing(pipe.to_owned()))
+    }
 }
 
 impl TemplateElement {
-    fn render<'a>(&'a self, params: &'a YamlMap, io: &mut impl ReadsFiles) -> Result<String, TemplateError> {
+    fn render<'a>(&'a self, params: &'a YamlMap, pipes: &'a PipeMap, io: &mut impl ReadsFiles) -> Result<String, TemplateError> {
         match self {
             TemplateElement::PlainText(text) => Ok(text.clone()),
-            TemplateElement::Replace{value, ..} => {
+            TemplateElement::Replace{value, pipe} => {
                 let lookup = lookup_value(value, params)?;
-                tostr(lookup)
+                let mut current = lookup.clone();
+                for ii in pipe {
+                    current = execute_pipe(&current, &ii.name, pipes, io)?;
+                }
+                tostr(&current)
             },
-            TemplateElement::File{snippet, filename, ..} => {
+            TemplateElement::File{snippet, filename, pipe} => {
                 let real_filename = format!("{}{}", if *snippet {"resources/snippets/"} else {""}, filename);
                 match io.read(&real_filename) {
                     Ok(strr) => Ok(strr.to_owned()),
                     Err(ee) => Err(TemplateError::FileError(ee))
                 }
             },
-            TemplateElement::FileAt{snippet, value, ..} => {
+            TemplateElement::FileAt{snippet, value, pipe} => {
                 let lookup = lookup_value(value, params)?;
                 let filename = tostr(lookup)?;
                 let real_filename = format!("{}{}", if *snippet {"resources/snippets/"} else {""}, filename);
@@ -80,11 +134,11 @@ impl TemplateElement {
             TemplateElement::IfExists{value, when_true, when_false} => {
                 let lookup = lookup_value(value, params);
                 match lookup {
-                    Ok(..) => render_elements(when_true, params, io),
+                    Ok(..) => render_elements(when_true, params, pipes, io),
                     Err(ee) => match ee {
                         TemplateError::KeyNotPresent(..) |
                         TemplateError::FieldNotPresent(..) |
-                        TemplateError::IndexOOB(..) => render_elements(when_false, params, io),
+                        TemplateError::IndexOOB(..) => render_elements(when_false, params, pipes, io),
                         _ => Err(ee)
                     }
                 }
@@ -95,18 +149,23 @@ impl TemplateElement {
                 let mapped: Vec<String> = map_m(&as_vec, |ii| {
                     let mut new_params = params.clone();
                     insert_value(&mut new_params, &name, ii.clone());
-                    render_elements(main, &new_params, io)
+                    render_elements(main, &new_params, pipes, io)
                 })?;
-                let sep = render_elements(separator, params, io)?;
+                let sep = render_elements(separator, params, pipes, io)?;
                 Ok(mapped.join(&sep))
             }
         }
     }
 }
 
-pub fn render_elements<'a>(elements: &'a Vec<TemplateElement>, params: &'a YamlMap, io: &mut impl ReadsFiles) -> Result<String, TemplateError> {
+pub fn render_elements<'a>(
+    elements: &'a Vec<TemplateElement>,
+    params: &'a YamlMap,
+    pipes: &'a PipeMap,
+    io: &mut impl ReadsFiles
+) -> Result<String, TemplateError> {
     elements.iter().try_fold("".to_owned(), |acc, ii| {
-        match ii.render(params, io) {
+        match ii.render(params, pipes, io) {
             err @ Err(..) => err,
             Ok(result) => {
                 let mut string = acc.to_owned();
@@ -117,9 +176,14 @@ pub fn render_elements<'a>(elements: &'a Vec<TemplateElement>, params: &'a YamlM
     })
 }
 
-pub fn render<'a>(input: &'a str, params: &'a YamlMap, io: &mut impl ReadsFiles) -> Result<String, TemplateError> {
+pub fn render<'a>(
+    input: &'a str,
+    params: &'a YamlMap,
+    pipes: &'a PipeMap,
+    io: &mut impl ReadsFiles
+) -> Result<String, TemplateError> {
     match parse_template_string(input) {
         Err(ee) => Err(TemplateError::ParseError(ee.to_string())),
-        Ok(elements) => render_elements(&elements, params, io)
+        Ok(elements) => render_elements(&elements, params, pipes, io)
     }
 }

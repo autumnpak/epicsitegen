@@ -7,6 +7,9 @@ use crate::template::{TemplateError, TemplateValue, TemplateValueAccess};
 use crate::utils::{fold_m};
 
 pub type YamlMap = Hash;
+pub type YamlValue = Yaml;
+
+pub fn new_yaml_map() -> Hash { Hash::new() }
 
 pub fn lookup_yaml_map<'a, 'b>(key: &'a str, mapping: &'a YamlMap) -> Result<&'a Yaml, TemplateError> {
     let key_as_yaml = YamlString(key.to_owned());

@@ -1,4 +1,5 @@
-use epicsitegen::template::{{render, TemplateError}};
+use epicsitegen::template::{render, TemplateError, PipeMap, PipeDefinition, new_pipe_map};
+use epicsitegen::parsers::{parse_template_string};
 use epicsitegen::io::{ReadsFiles, FileError};
 use yaml_rust2::{yaml::{Hash, Yaml}, YamlLoader};
 use std::collections::HashMap;
@@ -27,6 +28,14 @@ fn setup_io() -> TestFileCache {
     TestFileCache{files}
 }
 
+fn setup_pipes() -> PipeMap {
+    let mut pipemap = new_pipe_map();
+    pipemap.insert("test0".to_string(), PipeDefinition::Template(parse_template_string("um1").unwrap()));
+    pipemap.insert("test1".to_string(), PipeDefinition::Template(parse_template_string("um2 {{it}}").unwrap()));
+    pipemap.insert("test2".to_string(), PipeDefinition::Template(parse_template_string("um3 {{nah}}").unwrap()));
+    pipemap
+}
+
 fn accept(
     input: &str,
     params: &str,
@@ -35,7 +44,7 @@ fn accept(
     let parsed = YamlLoader::load_from_str(params).unwrap();
     let doc = &parsed[0];
     let pp: &Hash = doc.as_hash().expect("not a hash map?");
-    let render = render(input, &pp, &mut setup_io());
+    let render = render(input, &pp, &setup_pipes(), &mut setup_io());
     match render {
         Err(TemplateError::ParseError(ref ee)) => println!("{}", ee),
         _ => ()
@@ -51,7 +60,7 @@ fn reject(
     let parsed = YamlLoader::load_from_str(params).unwrap();
     let doc = &parsed[0];
     let pp: &Hash = doc.as_hash().expect("not a hash map?");
-    let render = render(input, &pp, &mut setup_io());
+    let render = render(input, &pp, &setup_pipes(), &mut setup_io());
     match render {
         Err(TemplateError::ParseError(ref ee)) => println!("{}", ee),
         _ => ()
@@ -126,4 +135,16 @@ fn if_exists_false_else() {
 #[test]
 fn for_loop_basic() {
     accept("foo {% for it in numbers %}{{it}} {% endfor %}yay", "numbers: [2, 4, 6]", "foo 2 4 6 yay");
+}
+#[test]
+fn replacement_with_pipe_1() {
+    accept("foo {{bar | test0}} yay", "bar: test", "foo um1 yay");
+}
+#[test]
+fn replacement_with_pipe_2() {
+    accept("foo {{bar | test1}} yay", "bar: test", "foo um2 test yay");
+}
+#[test]
+fn replacement_with_pipe_3() {
+    accept("foo {{bar | test2}} yay", "bar: {nah: yeah}", "foo um3 yeah yay");
 }
