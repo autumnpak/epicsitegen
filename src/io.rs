@@ -9,10 +9,12 @@ use crate::yaml::{YamlValue, YamlFileError, load_yaml};
 pub enum FileError {
     FileNotFound(String),
     FileCantBeRead(String),
+    FileCantBeWritten(String),
 }
 
 pub trait ReadsFiles {
     fn read(&mut self, filename: &str) -> Result<&str, FileError>;
+    fn write(&mut self, filename: &str, contents: &str) -> Result<(), FileError>;
     fn read_yaml(&mut self, filename: &str) -> Result<&YamlValue, YamlFileError>;
 }
 
@@ -29,7 +31,6 @@ impl<'a> fmt::Display for ReadsFilesImpl<'a> {
 pub struct FileCache {
     files: HashMap<String, String>,
     yamls: HashMap<String, YamlValue>,
-    file_pipes: HashMap<(String, Vec<String>), String>,
 }
 
 fn read_file(filename: &str) -> Result<String, FileError> {
@@ -60,5 +61,9 @@ impl ReadsFiles for FileCache {
                 ee.insert(load_yaml(&contents).map_err(|xx| YamlFileError::Yaml(xx))?)
             }
         })
+    }
+
+    fn write(&mut self, filename: &str, contents: &str) -> Result<(), FileError> {
+        fs::write(filename, contents).map_err(|xx| FileError::FileCantBeWritten(filename.to_owned()))
     }
 }
