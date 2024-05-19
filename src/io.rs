@@ -3,6 +3,7 @@ use std::collections::hash_map::Entry;
 use std::path::Path;
 use std::fs;
 use std::fmt;
+use crate::yaml::{YamlValue, YamlFileError, load_yaml};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum FileError {
@@ -12,6 +13,7 @@ pub enum FileError {
 
 pub trait ReadsFiles {
     fn read(&mut self, filename: &str) -> Result<&str, FileError>;
+    fn read_yaml(&mut self, filename: &str) -> Result<&YamlValue, YamlFileError>;
 }
 
 //thing we need because we can't use 'impl ReadsFiles' in PipeDefinition's type definition
@@ -26,6 +28,7 @@ impl<'a> fmt::Display for ReadsFilesImpl<'a> {
 
 pub struct FileCache {
     files: HashMap<String, String>,
+    yamls: HashMap<String, YamlValue>,
     file_pipes: HashMap<(String, Vec<String>), String>,
 }
 
@@ -45,6 +48,17 @@ impl ReadsFiles for FileCache {
         Ok(match self.files.entry(filename.to_owned()) {
             Entry::Occupied(ee) => ee.into_mut(),
             Entry::Vacant(ee) => ee.insert(read_file(filename)?),
+        })
+    }
+
+    fn read_yaml(&mut self, filename: &str) -> Result<&YamlValue, YamlFileError> {
+        let contentsref = self.read(filename).map_err(|xx| YamlFileError::File(xx))?;
+        let contents = contentsref.to_owned();
+        Ok(match self.yamls.entry(filename.to_owned()) {
+            Entry::Occupied(ee) => ee.into_mut(),
+            Entry::Vacant(ee) => {
+                ee.insert(load_yaml(&contents).map_err(|xx| YamlFileError::Yaml(xx))?)
+            }
         })
     }
 }

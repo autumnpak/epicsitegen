@@ -2,11 +2,13 @@ use epicsitegen::template::{render, TemplateError};
 use epicsitegen::pipes::{PipeMap, PipeDefinition, new_pipe_map};
 use epicsitegen::parsers::{parse_template_string};
 use epicsitegen::io::{ReadsFiles, FileError};
+use epicsitegen::yaml::{load_yaml, YamlValue, YamlFileError};
 use yaml_rust2::{yaml::{Hash, Yaml}, YamlLoader};
 use std::collections::HashMap;
 
 pub struct TestFileCache {
     files: HashMap<String, String>,
+    yamls: HashMap<String, YamlValue>,
 }
 
 impl ReadsFiles for TestFileCache {
@@ -15,6 +17,12 @@ impl ReadsFiles for TestFileCache {
             Some(ss) => Ok(ss),
             None => Err(FileError::FileNotFound(filename.to_owned())),
         }
+    }
+    fn read_yaml(&mut self, filename: &str) -> Result<&YamlValue, YamlFileError> {
+        let contents = self.read(filename).map_err(|xx| YamlFileError::File(xx))?;
+        let loaded = load_yaml(contents).map_err(|xx| YamlFileError::Yaml(xx))?;
+        self.yamls.insert(filename.to_owned(), loaded);
+        Ok(self.yamls.get(filename).unwrap())
     }
 }
 
@@ -26,7 +34,9 @@ fn setup_io() -> TestFileCache {
     files.insert("resources/snippets/aaa.txt".to_string(), "sapple".to_string());
     files.insert("resources/snippets/bbb.txt".to_string(), "sbanana".to_string());
     files.insert("resources/snippets/ccc.txt".to_string(), "scarrot".to_string());
-    TestFileCache{files}
+    files.insert("entry1.yaml".to_string(), "[9, 8]".to_string());
+    files.insert("entry2.yaml".to_string(), "[\"asd\", \"fgh\"]".to_string());
+    TestFileCache{files, yamls: HashMap::new()}
 }
 
 fn setup_pipes() -> PipeMap {
@@ -137,6 +147,26 @@ fn if_exists_false_else() {
 #[test]
 fn for_loop_basic() {
     accept("foo {% for it in numbers %}{{it}} {% endfor %}yay", "numbers: [2, 4, 6]", "foo 2 4 6 yay");
+}
+#[test]
+fn for_loop_values() {
+    accept("foo {% for it in numbers, morenumbers %}{{it}} {% endfor %}yay", "numbers: [2, 4, 6]\nmorenumbers: [1, 3]", "foo 2 4 6 1 3 yay");
+}
+#[test]
+fn for_loop_over_file() {
+    accept("foo {% for it in-file entry1.yaml %}{{it}} {% endfor %}yay", "numbers: [2, 4, 6]\nmorenumbers: [1, 3]", "foo 9 8 yay");
+}
+#[test]
+fn for_loop_over_file_at() {
+    accept("foo {% for it in-file-at loc %}{{it}} {% endfor %}yay", "loc: entry2.yaml\nnumbers: [2, 4, 6]\nmorenumbers: [1, 3]", "foo asd fgh yay");
+}
+#[test]
+fn for_loop_over_everything() {
+    accept("foo {% for it in numbers, morenumbers in-file entry1.yaml in-file-at loc %}{{it}} {% endfor %}yay", "loc: entry2.yaml\nnumbers: [2, 4, 6]\nmorenumbers: [1, 3]", "foo 2 4 6 1 3 9 8 asd fgh yay");
+}
+#[test]
+fn for_loop_over_everything_with_new_lines() {
+    accept("foo {% for it\n  in numbers, morenumbers\n  in-file entry1.yaml\n  in-file-at loc %}{{it}} {% endfor %}yay", "loc: entry2.yaml\nnumbers: [2, 4, 6]\nmorenumbers: [1, 3]", "foo 2 4 6 1 3 9 8 asd fgh yay");
 }
 #[test]
 fn replacement_with_template_pipe_1() {

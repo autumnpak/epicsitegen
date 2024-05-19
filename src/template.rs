@@ -2,8 +2,10 @@ use crate::yaml::{
     lookup_value,
     tostr,
     YamlMap,
+    YamlValue,
     to_iterable,
     insert_value,
+    YamlFileError,
 };
 use crate::parsers::parse_template_string;
 use crate::io::{ReadsFiles, FileError};
@@ -25,7 +27,9 @@ pub enum TemplateElement {
     },
     For {
         name: String,
-        value: TemplateValue,
+        values: Vec<TemplateValue>,
+        filenames: Vec<String>,
+        files_at: Vec<TemplateValue>,
         main: Vec<TemplateElement>,
         separator: Vec<TemplateElement>
     },
@@ -53,6 +57,7 @@ pub enum TemplateError {
     IndexOnUnindexable(String, usize),
     FieldOnUnfieldable(String, String),
     FileError(FileError),
+    YamlFileError(YamlFileError),
     ForOnUnindexable(String),
     PipeMissing(String),
     PipeExecutionError(String),
@@ -97,10 +102,9 @@ impl TemplateElement {
                     }
                 }
             }
-            TemplateElement::For{name, value, main, separator} => {
-                let lookup = lookup_value(value, params)?;
-                let as_vec = to_iterable(lookup)?;
-                let mapped: Vec<String> = map_m(&as_vec, |ii| {
+            TemplateElement::For{name, values, filenames, files_at, main, separator, ..} => {
+                let over = for_make_iterable(params, values, filenames, files_at, io)?;
+                let mut mapped: Vec<String> = map_m(&over, |ii| {
                     let mut new_params = params.clone();
                     insert_value(&mut new_params, &name, ii.clone());
                     render_elements(main, &new_params, pipes, io)
@@ -110,6 +114,36 @@ impl TemplateElement {
             }
         }
     }
+}
+
+fn for_make_iterable(
+    params: & YamlMap,
+    values: &Vec<TemplateValue>,
+    filenames: &Vec<String>,
+    files_at: &Vec<TemplateValue>,
+    io: &mut impl ReadsFiles
+) -> Result<Vec<YamlValue>, TemplateError> {
+    let mut entries = Vec::new();
+    for value in values {
+        let lookup = lookup_value(&value, params)?;
+        let mut as_vec = to_iterable(lookup)?;
+        entries.append(&mut as_vec);
+    }
+    for filename in filenames {
+        let lookup = io.read_yaml(filename)
+            .map_err(|xx| TemplateError::YamlFileError(xx))?;
+        let mut as_vec = to_iterable(lookup)?;
+        entries.append(&mut as_vec);
+    }
+    for fileat in files_at {
+        let lookup = lookup_value(&fileat, params)?;
+        let filename = tostr(lookup)?;
+        let file = io.read_yaml(&filename)
+            .map_err(|xx| TemplateError::YamlFileError(xx))?;
+        let mut as_vec = to_iterable(file)?;
+        entries.append(&mut as_vec);
+    }
+    Ok(entries)
 }
 
 pub fn render_elements<'a>(

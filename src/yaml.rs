@@ -1,13 +1,30 @@
 use yaml_rust2::{
     yaml::{Hash, Yaml},
     emitter::{YamlEmitter},
+    scanner::ScanError,
+    YamlLoader,
 };
 use yaml_rust2::yaml::Yaml::String as YamlString;
 use crate::template::{TemplateError, TemplateValue, TemplateValueAccess};
 use crate::utils::{fold_m};
+use crate::io::FileError;
 
 pub type YamlMap = Hash;
 pub type YamlValue = Yaml;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum YamlFileError {
+    File(FileError),
+    Yaml(ScanError),
+}
+
+pub fn load_yaml(strr: &str) -> Result<YamlValue, ScanError> {
+    let parsed = YamlLoader::load_from_str(strr);
+    match parsed {
+        Err(ee) => Err(ee),
+        Ok(ss) => Ok(ss[0].clone())
+    }
+}
 
 pub fn new_yaml_map() -> Hash { Hash::new() }
 

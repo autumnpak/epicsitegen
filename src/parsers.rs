@@ -54,17 +54,6 @@ fn parse_file_element(snippet: bool, pair: &mut Pairs<Rule>) -> TemplateElement 
   }
 }
 
-fn parse_for_element(pairs: &mut Pairs<Rule>) -> TemplateElement {
-  let name = pairs.next().unwrap().as_str().to_string();
-  let value = parse_value(pairs.next().unwrap());
-  let main = pairs.next().expect("e true").into_inner().map(parse_ast_node).collect();
-  let separator = match pairs.next().expect("e false").into_inner().next() {
-    None => vec![],
-    Some(ss) => ss.into_inner().map(parse_ast_node).collect(),
-  };
-  TemplateElement::For{name, value, main, separator}
-}
-
 fn parse_if_exists_element(pairs: &mut Pairs<Rule>) -> TemplateElement {
   let test = parse_value(pairs.next().unwrap());
   let when_true = pairs.next().expect("e true").into_inner().map(parse_ast_node).collect();
@@ -73,15 +62,6 @@ fn parse_if_exists_element(pairs: &mut Pairs<Rule>) -> TemplateElement {
     Some(ss) => ss.into_inner().map(parse_ast_node).collect(),
   };
   TemplateElement::IfExists{value: test, when_true, when_false}
-}
-
-fn parse_pipes(pairs: &mut Pairs<Rule>) -> Vec<Pipe> {
-  fn parse_pipe(pairs: &mut Pairs<Rule>) -> Pipe {
-    let name = pairs.next().unwrap().as_str().to_owned();
-    let params = pairs.map(|ii| ii.as_str().to_owned()).collect();
-    Pipe{name, params}
-  }
-  pairs.map(|xx| parse_pipe(&mut xx.into_inner())).collect()
 }
 
 fn parse_value(pair: Pair<Rule>) -> TemplateValue {
@@ -96,8 +76,48 @@ fn parse_value(pair: Pair<Rule>) -> TemplateValue {
       }).collect();
       TemplateValue{ base: name, accesses }
     }
-    _ => unreachable!("parse value"),
+    _ => unreachable!("parse value but was {}", pair),
   }
+}
+
+fn parse_pipes(pairs: &mut Pairs<Rule>) -> Vec<Pipe> {
+  fn parse_pipe(pairs: &mut Pairs<Rule>) -> Pipe {
+    let name = pairs.next().unwrap().as_str().to_owned();
+    let params = pairs.map(|ii| ii.as_str().to_owned()).collect();
+    Pipe{name, params}
+  }
+  pairs.map(|xx| parse_pipe(&mut xx.into_inner())).collect()
+}
+
+fn parse_filenames(pairs: &mut Pairs<Rule>) -> Vec<String> {
+  pairs.map(|ii| ii.as_str().to_owned()).collect()
+}
+
+fn parse_values(pairs: &mut Pairs<Rule>) -> Vec<TemplateValue> {
+  pairs.map(|ii| { println!("|{}|", ii.as_str()); parse_value(ii) }).collect()
+}
+
+fn parse_for_element(pairs: &mut Pairs<Rule>) -> TemplateElement {
+  let name = pairs.next().unwrap().as_str().to_string();
+  let mut values: Vec<TemplateValue> = Vec::new();
+  let mut filenames: Vec<String> = Vec::new();
+  let mut files_at: Vec<TemplateValue> = Vec::new();
+  let mut main: Option<Vec<TemplateElement>> = Option::None;
+  while main.is_none() {
+    let next = pairs.next().unwrap();
+    match next.as_rule() {
+      Rule::for_in => values = parse_values(&mut next.into_inner().next().unwrap().into_inner()),
+      Rule::for_in_file => filenames = parse_filenames(&mut next.into_inner().next().unwrap().into_inner()),
+      Rule::for_in_file_at => files_at = parse_values(&mut next.into_inner().next().unwrap().into_inner()),
+      Rule::ast => main = Some(next.into_inner().map(parse_ast_node).collect()),
+      _ => unreachable!("for loop options"),
+    };
+  };
+  let separator = match pairs.next().expect("e false").into_inner().next() {
+    None => vec![],
+    Some(ss) => ss.into_inner().map(parse_ast_node).collect(),
+  };
+  TemplateElement::For{name, values, filenames, files_at, main: main.unwrap(), separator}
 }
 
 pub fn parse_template_string(input: &str) -> Result<Vec<TemplateElement>, Error<Rule>> {
