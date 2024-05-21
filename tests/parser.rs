@@ -9,6 +9,7 @@ use std::collections::HashMap;
 pub struct TestFileCache {
     files: HashMap<String, String>,
     yamls: HashMap<String, YamlValue>,
+    pub written: HashMap<String, String>,
 }
 
 impl ReadsFiles for TestFileCache {
@@ -18,11 +19,19 @@ impl ReadsFiles for TestFileCache {
             None => Err(FileError::FileNotFound(filename.to_owned())),
         }
     }
+
     fn read_yaml(&mut self, filename: &str) -> Result<&YamlValue, YamlFileError> {
         let contents = self.read(filename).map_err(|xx| YamlFileError::File(xx))?;
         let loaded = load_yaml(contents).map_err(|xx| YamlFileError::Yaml(xx))?;
         self.yamls.insert(filename.to_owned(), loaded);
         Ok(self.yamls.get(filename).unwrap())
+    }
+    fn write(&mut self, filename: &str, contents: &str) -> Result<(), FileError> {
+        self.written.insert(filename.to_owned(), contents.to_owned());
+        Ok(())
+    }
+    fn copy_files(&self, from: &str, to: &str) -> Result<(), FileError> {
+        Ok(())
     }
 }
 
@@ -36,7 +45,7 @@ fn setup_io() -> TestFileCache {
     files.insert("resources/snippets/ccc.txt".to_string(), "scarrot".to_string());
     files.insert("entry1.yaml".to_string(), "[9, 8]".to_string());
     files.insert("entry2.yaml".to_string(), "[\"asd\", \"fgh\"]".to_string());
-    TestFileCache{files, yamls: HashMap::new()}
+    TestFileCache{files, yamls: HashMap::new(), written: HashMap::new()}
 }
 
 fn setup_pipes() -> PipeMap {

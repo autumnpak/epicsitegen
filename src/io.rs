@@ -1,21 +1,27 @@
+use crate::yaml::{YamlValue, YamlFileError, load_yaml};
+use crate::utils::{map_m};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::fs;
 use std::fmt;
-use crate::yaml::{YamlValue, YamlFileError, load_yaml};
+use std::io;
+use glob::{glob, Paths, GlobError};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum FileError {
     FileNotFound(String),
     FileCantBeRead(String),
     FileCantBeWritten(String),
+    FilesCantBeCopied(String),
+    CantCopyDirIntoFile(String, String),
 }
 
 pub trait ReadsFiles {
     fn read(&mut self, filename: &str) -> Result<&str, FileError>;
     fn write(&mut self, filename: &str, contents: &str) -> Result<(), FileError>;
     fn read_yaml(&mut self, filename: &str) -> Result<&YamlValue, YamlFileError>;
+    fn copy_files(&self, to: &str, from: &str) -> Result<(), FileError>;
 }
 
 //thing we need because we can't use 'impl ReadsFiles' in PipeDefinition's type definition
@@ -66,4 +72,35 @@ impl ReadsFiles for FileCache {
     fn write(&mut self, filename: &str, contents: &str) -> Result<(), FileError> {
         fs::write(filename, contents).map_err(|xx| FileError::FileCantBeWritten(filename.to_owned()))
     }
+
+    fn copy_files(&self, from: &str, to: &str) -> Result<(), FileError> {
+        let from_path = PathBuf::from(from);
+        let to_path = PathBuf::from(to);
+        if from_path.is_file() {
+            match fs::copy(from, to) {
+                Ok(_) => Ok(()),
+                Err(ee) => Err(FileError::FilesCantBeCopied(from.to_owned())),
+            }
+        } else {
+            if to_path.is_file() {
+                Err(FileError::CantCopyDirIntoFile(from.to_owned(), to.to_owned()))
+            } else {
+                copy_dir_all(from, to).map_err(|xx| FileError::FilesCantBeCopied(from.to_owned()))
+            }
+        }
+    }
+}
+
+fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        } else {
+            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
 }

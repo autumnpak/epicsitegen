@@ -32,5 +32,3 @@ pub fn map_m<'a, A, B, E>(
     }
     current
 }
-
-

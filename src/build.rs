@@ -9,9 +9,9 @@ pub enum BuildError {
 }
 
 pub enum BuildAction {
-    BuildPage {output: String, base_file: String, params: YamlMap},
+    BuildPage {output: String, input: String, params: YamlMap},
     BuildMultiplePages {
-        base_file: String,
+        input: String,
         default_params: YamlMap,
         filename: String,
     },
@@ -23,17 +23,30 @@ pub struct BuildMultiplePages {
     pub mappings: YamlMap,
 }
 
+fn build_page(
+    output: &str,
+    input: &str,
+    params: &YamlMap,
+    pipes: &PipeMap,
+    io: &mut impl ReadsFiles
+) -> Result<(), BuildError> {
+    let contents = match io.read(input) {
+        Ok(ss) => Ok(ss.to_owned()),
+        Err(ee) => Err(BuildError::FileError(ee)),
+    }?;
+    let rendered = render(&contents, params, pipes, io)
+        .map_err(|xx| BuildError::TemplateError(xx))?;
+    io.write(output, &rendered).map_err(|xx| BuildError::FileError(xx))
+}
+
 impl BuildAction {
     pub fn run(&self, pipes: &PipeMap, io: &mut impl ReadsFiles) -> Result<(), BuildError> {
         match self {
-            BuildAction::BuildPage{output, base_file, params} => {
-                let contents = match io.read(base_file) {
-                    Ok(ss) => Ok(ss.to_owned()),
-                    Err(ee) => Err(BuildError::FileError(ee)),
-                }?;
-                let rendered = render(&contents, params, pipes, io)
-                    .map_err(|xx| BuildError::TemplateError(xx))?;
-                io.write(output, &rendered).map_err(|xx| BuildError::FileError(xx))
+            BuildAction::BuildPage{output, input, params} => {
+                build_page(&output, &input, params, pipes, io)
+            }
+            BuildAction::CopyFiles{to, from} => {
+                io.copy_files(from, to).map_err(|ee| BuildError::FileError(ee))
             }
             _ => Ok(())
         }
