@@ -121,7 +121,13 @@ fn parse_for_element(pairs: &mut Pairs<Rule>) -> TemplateElement {
 }
 
 pub fn parse_template_string(input: &str) -> Result<Vec<TemplateElement>, Error<Rule>> {
-    let mut parsed = TemplateParser::parse(Rule::file, input)?;
+    let mut parsed = TemplateParser::parse(Rule::string_template, input)?;
     let ast = parsed.next().unwrap(); //never fails
     Ok(ast.into_inner().map(parse_ast_node).collect())
+}
+
+pub fn parse_mapping_string(input: &str) -> Result<Vec<TemplateValue>, Error<Rule>> {
+    let mut parsed = TemplateParser::parse(Rule::string_mapping, input)?;
+    let ast = parsed.next().unwrap(); //never fails
+    Ok(ast.into_inner().map(parse_value).collect())
 }

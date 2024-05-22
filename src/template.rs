@@ -104,7 +104,7 @@ impl TemplateElement {
             }
             TemplateElement::For{name, values, filenames, files_at, main, separator, ..} => {
                 let over = for_make_iterable(params, values, filenames, files_at, io)?;
-                let mut mapped: Vec<String> = map_m(&over, |ii| {
+                let mut mapped: Vec<String> = map_m(over, |ii| {
                     let mut new_params = params.clone();
                     insert_value(&mut new_params, &name, ii.clone());
                     render_elements(main, &new_params, pipes, io)

@@ -97,3 +97,10 @@ pub fn to_iterable(value: &Yaml) -> Result<Vec<Yaml>, TemplateError> {
 pub fn insert_value(map: &mut Hash, key: &str, value: Yaml) {
     map.insert(YamlString(key.to_string()), value);
 }
+
+pub fn unsafe_get_as_string<'a>(map: &'a Hash, key: &str) -> &'a str {
+    match map.get(&YamlString(key.to_string())).unwrap() {
+        Yaml::String(ss) => ss,
+        _ => panic!("unsafe_get_as_string when value wasnt a string")
+    }
+}

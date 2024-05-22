@@ -1,8 +1,11 @@
-file = _{ SOI ~ ast ~ EOI }
+string_template = _{ SOI ~ ast ~ EOI }
+string_mapping = _{SOI ~ ats ~ EOI}
 ws = _{ (" "|"\t"|"\n"|"\r")+ }
 ast = { (replacement | snippet | file_element | if_exists | for_element | plain_text)* }
 value = { ident ~ (field | index)* }
 values = { value ~ ws? ~ ("," ~ ws? ~ value ~ ws?)* ~ ("," ~ ws?)? }
+ats = { at+ }
+at = { "@" ~ ws? ~ value ~ ws? }
 ident = { ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "-" | "_")+ }
 field = { "." ~ ident }
 index = { "[" ~ numbers ~ "]" }
