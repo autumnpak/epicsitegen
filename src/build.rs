@@ -5,6 +5,7 @@ use crate::io::{ReadsFiles, FileError};
 use crate::parsers::{parse_template_string};
 use crate::utils::{map_m, map_m_ref, fold_m_mut, map_m_mut};
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum BuildError {
     Sourced(Box<BuildError>),
     FileError(FileError),

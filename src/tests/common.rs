@@ -12,6 +12,16 @@ pub struct TestFileCache {
     pub written: HashMap<String, String>,
 }
 
+impl TestFileCache {
+    pub fn assert_written(&self, filename: &str, contents: &str) {
+        assert_eq!(
+            self.written.get(filename)
+                .expect(&format!("{} was not written to", filename)),
+            contents
+        );
+    }
+}
+
 impl ReadsFiles for TestFileCache {
     fn read(&mut self, filename: &str) -> Result<&str, FileError> {
         match self.files.get(filename) {
@@ -45,6 +55,7 @@ pub fn setup_io() -> TestFileCache {
     files.insert("resources/snippets/ccc.txt".to_string(), "scarrot".to_string());
     files.insert("entry1.yaml".to_string(), "[9, 8]".to_string());
     files.insert("entry2.yaml".to_string(), "[\"asd\", \"fgh\"]".to_string());
+    files.insert("base01.txt".to_string(), "foo {{bar}} yay".to_string());
     TestFileCache{files, yamls: HashMap::new(), written: HashMap::new()}
 }
 
