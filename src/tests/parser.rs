@@ -1,11 +1,11 @@
-use epicsitegen::template::{render, TemplateError};
-use epicsitegen::pipes::{PipeMap, PipeDefinition, new_pipe_map};
-use epicsitegen::parsers::{parse_template_string};
-use epicsitegen::io::{ReadsFiles, FileError};
-use epicsitegen::yaml::{load_yaml, YamlValue, YamlFileError};
+use crate::template::{render, TemplateError};
+use crate::pipes::{PipeMap, PipeDefinition, new_pipe_map};
+use crate::parsers::{parse_template_string};
+use crate::io::{ReadsFiles, FileError};
+use crate::yaml::{load_yaml, YamlValue, YamlFileError};
 use yaml_rust2::{yaml::{Hash, Yaml}, YamlLoader};
 use std::collections::HashMap;
-use crate::common::{TestFileCache, setup_io, setup_pipes}
+use crate::tests::common::{TestFileCache, setup_io, setup_pipes};
 
 fn accept(
     input: &str,

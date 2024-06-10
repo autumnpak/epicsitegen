@@ -1,8 +1,8 @@
-use epicsitegen::template::{render, TemplateError};
-use epicsitegen::pipes::{PipeMap, PipeDefinition, new_pipe_map};
-use epicsitegen::parsers::{parse_template_string};
-use epicsitegen::io::{ReadsFiles, FileError};
-use epicsitegen::yaml::{load_yaml, YamlValue, YamlFileError};
+use crate::template::{render, TemplateError};
+use crate::pipes::{PipeMap, PipeDefinition, new_pipe_map};
+use crate::parsers::{parse_template_string};
+use crate::io::{ReadsFiles, FileError};
+use crate::yaml::{load_yaml, YamlValue, YamlFileError};
 use yaml_rust2::{yaml::{Hash, Yaml}, YamlLoader};
 use std::collections::HashMap;
 
@@ -35,7 +35,7 @@ impl ReadsFiles for TestFileCache {
     }
 }
 
-fn setup_io() -> TestFileCache {
+pub fn setup_io() -> TestFileCache {
     let mut files = HashMap::new();
     files.insert("aaa.txt".to_string(), "apple".to_string());
     files.insert("bbb.txt".to_string(), "banana".to_string());
@@ -48,7 +48,7 @@ fn setup_io() -> TestFileCache {
     TestFileCache{files, yamls: HashMap::new(), written: HashMap::new()}
 }
 
-fn setup_pipes() -> PipeMap {
+pub fn setup_pipes() -> PipeMap {
     let mut pipemap = new_pipe_map();
     pipemap.insert("test0".to_string(), PipeDefinition::Template(parse_template_string("um1").unwrap()));
     pipemap.insert("test1".to_string(), PipeDefinition::Template(parse_template_string("um2 {{it}}").unwrap()));
