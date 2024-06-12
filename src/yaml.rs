@@ -36,6 +36,17 @@ pub fn lookup_yaml_map<'a, 'b>(key: &'a str, mapping: &'a YamlMap) -> Result<&'a
     }
 }
 
+pub fn lookup_str_from_yaml_map<'a, 'b>(key: &'a str, mapping: &'a YamlMap) -> Result<&'a str, TemplateError> {
+    let key_as_yaml = YamlString(key.to_owned());
+    match mapping.get(&key_as_yaml) {
+        None => Err(TemplateError::KeyNotPresent(key.to_owned())),
+        Some(value) => match value {
+            Yaml::String(ss) => Ok(ss),
+            _ => Err(TemplateError::KeyNotString(key.to_owned())),
+        }
+    }
+}
+
 pub fn lookup_value<'a, 'b>(value: &'a TemplateValue, params: &'a YamlMap) -> Result<&'a Yaml, TemplateError> {
     let base = lookup_yaml_map(&value.base, params)?;
     let mut path: String = value.base.to_owned();

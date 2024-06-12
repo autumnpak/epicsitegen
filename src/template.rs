@@ -50,6 +50,7 @@ pub enum TemplateValueAccess {
 #[derive(Debug, PartialEq, Eq)]
 pub enum TemplateError {
     KeyNotPresent(String),
+    KeyNotString(String),
     ParseError(String),
     SerialisationError(String),
     IndexOOB(String, usize),
@@ -62,6 +63,7 @@ pub enum TemplateError {
     PipeMissing(String),
     PipeExecutionError(String),
 }
+
 impl TemplateElement {
     fn render<'a>(&'a self, params: &'a YamlMap, pipes: &'a PipeMap, io: &mut impl ReadsFiles) -> Result<String, TemplateError> {
         match self {

@@ -1,35 +1,34 @@
-use crate::yaml::{YamlMap, YamlValue, YamlFileError};
+use crate::yaml::{YamlMap, YamlValue, YamlFileError, lookup_str_from_yaml_map};
 use crate::template::{TemplateError, render, render_elements};
 use crate::pipes::{PipeMap};
 use crate::io::{ReadsFiles, FileError};
 use crate::parsers::{parse_template_string};
-use crate::utils::{map_m, map_m_ref, fold_m_mut, map_m_mut};
+use crate::utils::{map_m_mut, map_m_ref, fold_m_mut, map_m_index, map_m_mut_index};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum BuildError {
-    Sourced(Box<BuildError>),
+    Sourced(ParamsSource, Box<BuildError>),
     FileError(FileError),
     YamlFileError(YamlFileError),
     TemplateError(TemplateError),
     TemplateErrorForFile(String, TemplateError),
     BMFIsntArray(String),
     BMFContainsNonMap(String),
-    BMInputNotSpecified(String),
-    BMOutputNotSpecified(String),
-    BMMappingParseError(String),
+    BMInputNotSpecified(String, ParamsSource),
+    BMOutputNotSpecified(ParamsSource),
+    BMMappingParseError(String, ParamsSource),
+    BMMappingTemplateError(TemplateError, ParamsSource),
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum ParamsSource {
-    File(String),
-    None
-}
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ParamsSource(usize, Option<String>);
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct SourcedParams(YamlMap, ParamsSource, YamlMap); //params, source, mapping
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct SourcedParamsWithFiles(YamlMap, ParamsSource, String, String);
+pub struct SourcedParamsWithFiles(YamlMap, ParamsSource, String, String); //params, source, input,
+                                                                          //output
 
 pub enum BuildAction {
     BuildPage {output: String, input: String, params: YamlMap},
@@ -83,15 +82,15 @@ fn build_multiple_pages_files(
             YamlValue::Array(aa) => Ok(aa),
             _ => Err(BuildError::BMFIsntArray(file.to_owned()))
         }?;
-        map_m(arr, |aa| match aa {
+        map_m_index(arr, |idx, aa| match aa {
             YamlValue::Hash(hh) => Ok(entries.push(
-                    SourcedParams(hh.to_owned(), ParamsSource::File(file.to_owned()), on.mapping.to_owned())
+                    SourcedParams(hh.to_owned(), ParamsSource(idx, Some(file.to_owned())), on.mapping.to_owned())
             )),
             _ => Err(BuildError::BMFContainsNonMap(file.to_owned()))
         })
     })?;
-    for param in &on.params {
-        entries.push(SourcedParams(param.to_owned(), ParamsSource::None, on.mapping.to_owned()))
+    for (idx, param) in on.params.iter().enumerate() {
+        entries.push(SourcedParams(param.to_owned(), ParamsSource(idx, None), on.mapping.to_owned()))
     }
     Ok(entries)
 }
@@ -102,35 +101,40 @@ fn build_multiple_pages_map_params(
     pipes: &PipeMap,
     io: &mut impl ReadsFiles
 ) -> Result<Vec<SourcedParamsWithFiles>, BuildError> {
-    map_m_mut(values, |ii| {
+    map_m_mut(values, |ii: SourcedParams| {
         let mut params: YamlMap = default_params.to_owned();
         params.extend(ii.0);
-        Ok(SourcedParamsWithFiles(params, ii.1, "".to_owned(), "".to_owned()))
+        let mapped = apply_mapping(&params, &ii.2, &ii.1, pipes, io)?;
+        let output = lookup_str_from_yaml_map("output", &mapped).map_err(|_| BuildError::BMOutputNotSpecified(ii.1.clone()))?;
+        let input = lookup_str_from_yaml_map("input", &mapped).map_err(|_| BuildError::BMInputNotSpecified(output.to_owned(), ii.1.clone()))?;
+        Ok(SourcedParamsWithFiles(mapped.to_owned(), ii.1, input.to_owned(), output.to_owned()))
     })
 }
 
 pub fn apply_mapping<'a>(
-    dest: &'a mut YamlMap,
-    mapping: &'a mut YamlMap,
+    params: &'a YamlMap,
+    mapping: &'a YamlMap,
+    source: &'a ParamsSource,
     pipes: &PipeMap,
     io: &mut impl ReadsFiles
-) -> Result<(), BuildError> {
+) -> Result<YamlMap, BuildError> {
+    let mut mapp = params.to_owned();
     for (key, value) in mapping {
         match value {
             YamlValue::String(ss) => {
                 match parse_template_string(ss) {
-                    Err(ee) => return Err(BuildError::BMMappingParseError(ee.to_string())),
+                    Err(ee) => return Err(BuildError::BMMappingParseError(ee.to_string(), source.clone())),
                     Ok(elements) => {
-                        let elements = render_elements(&elements, dest, pipes, io)
-                            .map_err(|xx| BuildError::TemplateError(xx))?;
-                        dest.insert(key.to_owned(), YamlValue::String(elements));
+                        let elements = render_elements(&elements, &mapp, pipes, io)
+                            .map_err(|xx| BuildError::BMMappingTemplateError(xx, source.clone()))?;
+                        mapp.insert(key.to_owned(), YamlValue::String(elements));
                     }
                 }
             },
             _ => ()
         }
     }
-    Ok(())
+    Ok(mapp)
 }
 
 fn build_multiple_pages_actually_build(
@@ -140,7 +144,7 @@ fn build_multiple_pages_actually_build(
 ) -> Result<(), BuildError> {
     fold_m_mut((), values, |_, ii: SourcedParamsWithFiles| {
         build_page(&ii.2, &ii.3, &ii.0, pipes, io)
-            .map_err(|ee| BuildError::Sourced(Box::new(ee)))
+            .map_err(|ee| BuildError::Sourced(ii.1.clone(), Box::new(ee)))
     })?;
     Ok(())
 }

@@ -35,6 +35,13 @@ pub fn map_m<'a, A, B, E>(
     map_m_mut(list, func)
 }
 
+pub fn map_m_index<'a, A, B, E>(
+    list: Vec<A>,
+    mut func: impl FnMut(usize, A) -> Result<B, E>
+) -> Result<Vec<B>, E> {
+    map_m_mut_index(list, func)
+}
+
 pub fn map_m_ref<'a, A, B, E>(
     list: &'a Vec<A>,
     mut func: impl FnMut(&'a A) -> Result<B, E>
@@ -55,15 +62,15 @@ pub fn map_m_ref<'a, A, B, E>(
     current
 }
 
-pub fn map_m_mut<A, B, E>(
+pub fn map_m_mut_index<A, B, E>(
     list: Vec<A>,
-    mut func: impl FnMut(A) -> Result<B, E>
+    mut func: impl FnMut(usize, A) -> Result<B, E>
 ) -> Result<Vec<B>, E> {
     let mut current: Result<Vec<B>, E> = Ok(vec![]);
-    for aa in list {
+    for (idx, aa) in list.into_iter().enumerate() {
         current = match current {
             Err(..) => current,
-            Ok(mut ss) => match func(aa) {
+            Ok(mut ss) => match func(idx, aa) {
                 Err(ee) => Err(ee),
                 Ok(ss2) => {
                     ss.push(ss2);
@@ -73,6 +80,13 @@ pub fn map_m_mut<A, B, E>(
         }
     }
     current
+}
+
+pub fn map_m_mut<A, B, E>(
+    list: Vec<A>,
+    mut func: impl FnMut(A) -> Result<B, E>
+) -> Result<Vec<B>, E> {
+    map_m_mut_index(list, |_, mm| func(mm))
 }
 
 pub fn map_mut<A, B>(
