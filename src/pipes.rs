@@ -54,7 +54,7 @@ pub fn execute_pipe<'a>(
             };
             match func(&input, pipemap, &ioimpl) {
                 Ok(strr) => Ok(strr),
-                Err(ee) => Err(TemplateError::PipeExecutionError(ee))
+                Err(ee) => Err(TemplateError::PipeExecutionError(pipe.to_owned(), ee))
             }
         },
         None => Err(TemplateError::PipeMissing(pipe.to_owned()))

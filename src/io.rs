@@ -17,6 +17,18 @@ pub enum FileError {
     CantCopyDirIntoFile(String, String),
 }
 
+impl std::fmt::Display for FileError {
+    fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FileError::FileNotFound(strr) => write!(ff, "Can't find the file {}", strr),
+            FileError::FileCantBeRead(strr) => write!(ff, "Can't read the file {}", strr),
+            FileError::FileCantBeWritten(strr) => write!(ff, "Can't write to the file {}", strr),
+            FileError::FilesCantBeCopied(strr) => write!(ff, "Can't copy the files at {}", strr),
+            FileError::CantCopyDirIntoFile(from, to) => write!(ff, "Can't copy {} into {} as its a file", from, to),
+        }
+    }
+}
+
 pub trait ReadsFiles {
     fn read(&mut self, filename: &str) -> Result<&str, FileError>;
     fn write(&mut self, filename: &str, contents: &str) -> Result<(), FileError>;

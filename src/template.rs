@@ -49,6 +49,8 @@ pub enum TemplateValueAccess {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TemplateError {
+    FileError(FileError),
+    YamlFileError(YamlFileError),
     KeyNotPresent(String),
     KeyNotString(String),
     ParseError(String),
@@ -57,11 +59,29 @@ pub enum TemplateError {
     FieldNotPresent(String, String),
     IndexOnUnindexable(String, usize),
     FieldOnUnfieldable(String, String),
-    FileError(FileError),
-    YamlFileError(YamlFileError),
     ForOnUnindexable(String),
     PipeMissing(String),
-    PipeExecutionError(String),
+    PipeExecutionError(String, String),
+}
+
+impl std::fmt::Display for TemplateError {
+    fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TemplateError::FileError(err) => err.fmt(ff),
+            TemplateError::YamlFileError(err) => err.fmt(ff),
+            TemplateError::KeyNotPresent(strr) => write!(ff, "The key {} was not present in the parameters.", strr),
+            TemplateError::KeyNotString(strr) => write!(ff, "The key {} in the parameters was not a string.", strr),
+            TemplateError::ParseError(strr) => write!(ff, "Parsing the templating text failed: {}", strr),
+            TemplateError::SerialisationError(strr) => write!(ff, "Failed to serialise a value: {}", strr),
+            TemplateError::IndexOOB(strr, idx) => write!(ff, "Index {} of {} is out of bounds", idx, strr),
+            TemplateError::IndexOnUnindexable(strr, idx) => write!(ff, "{} isn't indexable, so can't be indexed at {}", strr, idx),
+            TemplateError::FieldNotPresent(strr, idx) => write!(ff, "{} has no property named {}", strr, idx),
+            TemplateError::FieldOnUnfieldable(strr, idx) => write!(ff, "{} has no properties, so field {} can't be accessed", strr, idx),
+            TemplateError::ForOnUnindexable(strr) => write!(ff, "Can't do a for loop on {} as it's not indexable", strr),
+            TemplateError::PipeMissing(strr) => write!(ff, "Can't use pipe {} as it doesn't exist", strr),
+            TemplateError::PipeExecutionError(pipename, error) => write!(ff, "Error running pipe {}: {}", pipename, error),
+        }
+    }
 }
 
 impl TemplateElement {

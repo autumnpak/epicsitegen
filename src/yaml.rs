@@ -18,6 +18,15 @@ pub enum YamlFileError {
     Yaml(ScanError),
 }
 
+impl std::fmt::Display for YamlFileError {
+    fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            YamlFileError::File(err) => err.fmt(ff),
+            YamlFileError::Yaml(err) => err.fmt(ff),
+        }
+    }
+}
+
 pub fn load_yaml(strr: &str) -> Result<YamlValue, ScanError> {
     let parsed = YamlLoader::load_from_str(strr);
     match parsed {
