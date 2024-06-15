@@ -3,25 +3,51 @@ use crate::template::{TemplateError, render, render_elements};
 use crate::pipes::{PipeMap};
 use crate::io::{ReadsFiles, FileError};
 use crate::parsers::{parse_template_string};
-use crate::utils::{map_m_mut, map_m_ref, fold_m_mut, map_m_index, map_m_mut_index};
+use crate::utils::{map_m_mut, map_m_ref, fold_m_mut, map_m_index, map_m_ref_index};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum BuildError {
-    Sourced(ParamsSource, Box<BuildError>),
+    BMSourced(ParamsSource, Box<BuildError>),
     FileError(FileError),
     YamlFileError(YamlFileError),
     TemplateError(TemplateError),
-    TemplateErrorForFile(String, TemplateError),
     BMFIsntArray(String),
-    BMFContainsNonMap(String),
+    BMFContainsNonMap(String, usize),
     BMInputNotSpecified(String, ParamsSource),
     BMOutputNotSpecified(ParamsSource),
-    BMMappingParseError(String, ParamsSource),
-    BMMappingTemplateError(TemplateError, ParamsSource),
+    BMMappingParseError(String, String, ParamsSource),
+    BMMappingTemplateError(TemplateError, String, ParamsSource),
+}
+
+impl std::fmt::Display for BuildError {
+    fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BuildError::FileError(ee) => ee.fmt(ff),
+            BuildError::YamlFileError(ee) => ee.fmt(ff),
+            BuildError::TemplateError(ee) => ee.fmt(ff),
+            BuildError::BMFIsntArray(filename) => write!(ff, "Can't build multiple files using {} as params as it doesn't contain a yaml array", filename),
+            BuildError::BMFContainsNonMap(filename, idx) => write!(ff, "Can't build multiple files using {} as params because entry {} isn't a map", filename, idx),
+            BuildError::BMOutputNotSpecified(source) => write!(ff, "Can't build the file at {} because it has no output specified", source),
+            BuildError::BMInputNotSpecified(filename, source) => write!(ff, "Can't build {} (at {}) because it has no base input specified", filename, source),
+            BuildError::BMMappingParseError(err, key, source) => write!(ff, "Can't parse mapping {} (at {}): {}", key, source, err),
+            BuildError::BMMappingTemplateError(err, key, source) => write!(ff, "Can't parse mapping {} (at {}): {}", key, source, err),
+            BuildError::BMSourced(source, err) => write!(ff, "At {}: {}", source, err),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct ParamsSource(usize, Option<String>);
+pub struct ParamsSource(usize, usize, Option<String>); //"on" grouping, array index, filename
+
+impl std::fmt::Display for ParamsSource {
+    fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.2.clone() {
+            Some(ss) => write!(ff, "{}", ss),
+            None => write!(ff, "(specified params)"),
+        }?;
+        write!(ff, ":{} in grouping {}", self.1, self.0)
+    }
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct SourcedParams(YamlMap, ParamsSource, YamlMap); //params, source, mapping
@@ -53,7 +79,7 @@ impl BuildAction {
             },
             BuildAction::BuildMultiplePages{default_params, on} => {
                 let mut entries: Vec<SourcedParams> = vec![];
-                for mut source in map_m_ref(on, |xx| build_multiple_pages_files(xx, pipes, io))? {
+                for mut source in map_m_ref_index(on, |idx, xx| build_multiple_pages_files(xx, idx, io))? {
                     entries.append(&mut source);
                 };
                 let mapped = build_multiple_pages_map_params(default_params, entries, pipes, io)?;
@@ -62,14 +88,13 @@ impl BuildAction {
             BuildAction::CopyFiles{to, from} => {
                 io.copy_files(from, to).map_err(|ee| BuildError::FileError(ee))
             },
-            _ => Ok(())
         }
     }
 }
 
 fn build_multiple_pages_files(
     on: &BuildMultiplePages,
-    pipes: &PipeMap,
+    group_index: usize,
     io: &mut impl ReadsFiles
 ) -> Result<Vec<SourcedParams>, BuildError> {
     let mut entries: Vec<SourcedParams> = vec![];
@@ -84,13 +109,13 @@ fn build_multiple_pages_files(
         }?;
         map_m_index(arr, |idx, aa| match aa {
             YamlValue::Hash(hh) => Ok(entries.push(
-                    SourcedParams(hh.to_owned(), ParamsSource(idx, Some(file.to_owned())), on.mapping.to_owned())
+                    SourcedParams(hh.to_owned(), ParamsSource(group_index, idx, Some(file.to_owned())), on.mapping.to_owned())
             )),
-            _ => Err(BuildError::BMFContainsNonMap(file.to_owned()))
+            _ => Err(BuildError::BMFContainsNonMap(file.to_owned(), idx))
         })
     })?;
     for (idx, param) in on.params.iter().enumerate() {
-        entries.push(SourcedParams(param.to_owned(), ParamsSource(idx, None), on.mapping.to_owned()))
+        entries.push(SourcedParams(param.to_owned(), ParamsSource(group_index, idx, None), on.mapping.to_owned()))
     }
     Ok(entries)
 }
@@ -123,10 +148,18 @@ pub fn apply_mapping<'a>(
         match value {
             YamlValue::String(ss) => {
                 match parse_template_string(ss) {
-                    Err(ee) => return Err(BuildError::BMMappingParseError(ee.to_string(), source.clone())),
+                    Err(ee) => return Err(BuildError::BMMappingParseError(
+                            ee.to_string(),
+                            key.to_owned().as_str().unwrap().to_owned(),
+                            source.clone()
+                        )),
                     Ok(elements) => {
                         let elements = render_elements(&elements, &mapp, pipes, io)
-                            .map_err(|xx| BuildError::BMMappingTemplateError(xx, source.clone()))?;
+                            .map_err(|xx| BuildError::BMMappingTemplateError(
+                                    xx,
+                                    key.to_owned().as_str().unwrap().to_owned(), 
+                                    source.clone()
+                            ))?;
                         mapp.insert(key.to_owned(), YamlValue::String(elements));
                     }
                 }
@@ -144,7 +177,7 @@ fn build_multiple_pages_actually_build(
 ) -> Result<(), BuildError> {
     fold_m_mut((), values, |_, ii: SourcedParamsWithFiles| {
         build_page(&ii.2, &ii.3, &ii.0, pipes, io)
-            .map_err(|ee| BuildError::Sourced(ii.1.clone(), Box::new(ee)))
+            .map_err(|ee| BuildError::BMSourced(ii.1.clone(), Box::new(ee)))
     })?;
     Ok(())
 }

@@ -14,7 +14,7 @@ use crate::pipes::{
     Pipe, PipeMap, execute_pipe
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TemplateElement {
     PlainText(String),
     Replace { value: TemplateValue, pipe: Vec<Pipe> },
@@ -35,13 +35,13 @@ pub enum TemplateElement {
     },
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct TemplateValue {
     pub base: String,
     pub accesses: Vec<TemplateValueAccess>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TemplateValueAccess {
     Field(String),
     Index(usize)
@@ -50,7 +50,10 @@ pub enum TemplateValueAccess {
 #[derive(Debug, PartialEq, Eq)]
 pub enum TemplateError {
     FileError(FileError),
+    FileErrorDerivedFrom(FileError, TemplateValue),
     YamlFileError(YamlFileError),
+    OnForLoopIteration(Box<TemplateError>, String),
+    InIfExistsLoop(Box<TemplateError>, TemplateValue, bool),
     KeyNotPresent(String),
     KeyNotString(String),
     ParseError(String),
@@ -64,11 +67,29 @@ pub enum TemplateError {
     PipeExecutionError(String, String),
 }
 
+impl std::fmt::Display for TemplateValue {
+    fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(ff, "{}{}", self.base, Vec::from_iter(self.accesses.iter().map(|ii| ii.to_string())).join(""))
+    }
+}
+
+impl std::fmt::Display for TemplateValueAccess {
+    fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TemplateValueAccess::Field(strr) => write!(ff, ".{}", strr),
+            TemplateValueAccess::Index(strr) => write!(ff, ".{}", strr),
+        }
+    }
+}
+
 impl std::fmt::Display for TemplateError {
     fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TemplateError::FileError(err) => err.fmt(ff),
+            TemplateError::FileErrorDerivedFrom(err, value) => write!(ff, "{} (derived from {})", err, value),
             TemplateError::YamlFileError(err) => err.fmt(ff),
+            TemplateError::OnForLoopIteration(err, value) => write!(ff, "{}\nwithin for loop entry {}", err, value),
+            TemplateError::InIfExistsLoop(err, value, truthiness) => write!(ff, "{}\nwithin the {} branch of checking if {} exists", err, truthiness, value),
             TemplateError::KeyNotPresent(strr) => write!(ff, "The key {} was not present in the parameters.", strr),
             TemplateError::KeyNotString(strr) => write!(ff, "The key {} in the parameters was not a string.", strr),
             TemplateError::ParseError(strr) => write!(ff, "Parsing the templating text failed: {}", strr),
@@ -109,27 +130,29 @@ impl TemplateElement {
                 let real_filename = format!("{}{}", if *snippet {"resources/snippets/"} else {""}, filename);
                 match io.read(&real_filename) {
                     Ok(strr) => Ok(strr.to_owned()),
-                    Err(ee) => Err(TemplateError::FileError(ee))
+                    Err(ee) => Err(TemplateError::FileErrorDerivedFrom(ee, value.clone()))
                 }
             }
             TemplateElement::IfExists{value, when_true, when_false} => {
                 let lookup = lookup_value(value, params);
                 match lookup {
-                    Ok(..) => render_elements(when_true, params, pipes, io),
+                    Ok(..) => render_elements(when_true, params, pipes, io)
+                        .map_err(|ee| TemplateError::InIfExistsLoop(Box::new(ee), value.clone(), true)),
                     Err(ee) => match ee {
                         TemplateError::KeyNotPresent(..) |
                         TemplateError::FieldNotPresent(..) |
-                        TemplateError::IndexOOB(..) => render_elements(when_false, params, pipes, io),
+                        TemplateError::IndexOOB(..) => render_elements(when_false, params, pipes, io)
+                            .map_err(|ee| TemplateError::InIfExistsLoop(Box::new(ee), value.clone(), false)),
                         _ => Err(ee)
                     }
                 }
             }
             TemplateElement::For{name, values, filenames, files_at, main, separator, ..} => {
                 let over = for_make_iterable(params, values, filenames, files_at, io)?;
-                let mut mapped: Vec<String> = map_m(over, |ii| {
+                let mapped: Vec<String> = map_m(over, |ii| {
                     let mut new_params = params.clone();
-                    insert_value(&mut new_params, &name, ii.clone());
-                    render_elements(main, &new_params, pipes, io)
+                    insert_value(&mut new_params, &name, ii.0.clone());
+                    render_elements(main, &new_params, pipes, io).map_err(|ee| TemplateError::OnForLoopIteration(Box::new(ee), ii.1.to_string()))
                 })?;
                 let sep = render_elements(separator, params, pipes, io)?;
                 Ok(mapped.join(&sep))
@@ -138,32 +161,58 @@ impl TemplateElement {
     }
 }
 
-fn for_make_iterable(
+#[derive(Debug, PartialEq, Eq, Clone)]
+enum ForIterationType<'a>{
+    Values(&'a TemplateValue, usize),
+    Filenames(&'a str, usize),
+    FileAt(&'a TemplateValue, String, usize),
+}
+
+impl<'a> std::fmt::Display for ForIterationType<'a> {
+    fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ForIterationType::FileAt(value, filename, size) => write!(ff, "{} at file {} derived from {}", size, filename, value),
+            ForIterationType::Filenames(filename, size) => write!(ff, "{} at file {}", size, filename),
+            ForIterationType::Values(value, size) => write!(ff, "{} of {}", size, value),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+struct ForIteration<'a>(YamlValue, ForIterationType<'a>);
+
+fn for_make_iterable<'a>(
     params: & YamlMap,
-    values: &Vec<TemplateValue>,
-    filenames: &Vec<String>,
-    files_at: &Vec<TemplateValue>,
+    values: &'a Vec<TemplateValue>,
+    filenames: &'a Vec<String>,
+    files_at: &'a Vec<TemplateValue>,
     io: &mut impl ReadsFiles
-) -> Result<Vec<YamlValue>, TemplateError> {
-    let mut entries = Vec::new();
+) -> Result<Vec<ForIteration<'a>>, TemplateError> {
+    let mut entries: Vec<ForIteration> = Vec::new();
     for value in values {
         let lookup = lookup_value(&value, params)?;
-        let mut as_vec = to_iterable(lookup)?;
-        entries.append(&mut as_vec);
+        let as_vec = to_iterable(lookup)?;
+        for (ind, finalval) in as_vec.into_iter().enumerate() {
+            entries.push(ForIteration(finalval, ForIterationType::Values(&value, ind)));
+        }
     }
     for filename in filenames {
         let lookup = io.read_yaml(filename)
             .map_err(|xx| TemplateError::YamlFileError(xx))?;
-        let mut as_vec = to_iterable(lookup)?;
-        entries.append(&mut as_vec);
+        let as_vec = to_iterable(lookup)?;
+        for (ind, finalval) in as_vec.into_iter().enumerate() {
+            entries.push(ForIteration(finalval, ForIterationType::Filenames(&filename, ind)));
+        }
     }
     for fileat in files_at {
         let lookup = lookup_value(&fileat, params)?;
         let filename = tostr(lookup)?;
         let file = io.read_yaml(&filename)
             .map_err(|xx| TemplateError::YamlFileError(xx))?;
-        let mut as_vec = to_iterable(file)?;
-        entries.append(&mut as_vec);
+        let as_vec = to_iterable(file)?;
+        for (ind, finalval) in as_vec.into_iter().enumerate() {
+            entries.push(ForIteration(finalval, ForIterationType::FileAt(&fileat, filename.to_owned(), ind)));
+        }
     }
     Ok(entries)
 }

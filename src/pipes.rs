@@ -8,7 +8,7 @@ use crate::template::{
 };
 use std::collections::HashMap;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Pipe {
     pub name: String,
     pub params: Vec<String>
