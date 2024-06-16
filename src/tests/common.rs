@@ -64,6 +64,7 @@ pub fn setup_pipes() -> PipeMap {
     pipemap.insert("test0".to_string(), PipeDefinition::Template(parse_template_string("um1").unwrap()));
     pipemap.insert("test1".to_string(), PipeDefinition::Template(parse_template_string("um2 {{it}}").unwrap()));
     pipemap.insert("test2".to_string(), PipeDefinition::Template(parse_template_string("um3 {{nah}}").unwrap()));
+    pipemap.insert("txt".to_string(), PipeDefinition::Template(parse_template_string("{{it}}.txt").unwrap()));
     pipemap.insert("testfn".to_string(), PipeDefinition::Fn(|input, pipes, io| Ok(Yaml::String("bleh".to_owned()))));
     pipemap
 }

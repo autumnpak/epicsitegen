@@ -11,7 +11,7 @@ use crate::parsers::parse_template_string;
 use crate::io::{ReadsFiles, FileError};
 use crate::utils::{map_m};
 use crate::pipes::{
-    Pipe, PipeMap, execute_pipe
+    Pipe, PipeMap, execute_pipes, PipeInputSource
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -19,7 +19,7 @@ pub enum TemplateElement {
     PlainText(String),
     Replace { value: TemplateValue, pipe: Vec<Pipe> },
     File { snippet: bool, filename: String, pipe: Vec<Pipe> },
-    FileAt { snippet: bool, value: TemplateValue, pipe: Vec<Pipe> },
+    FileAt { snippet: bool, value: TemplateValue, value_pipe: Vec<Pipe>, contents_pipe: Vec<Pipe> },
     IfExists {
         value: TemplateValue,
         when_true: Vec<TemplateElement>,
@@ -115,25 +115,37 @@ impl TemplateElement {
             TemplateElement::PlainText(text) => Ok(text.clone()),
             TemplateElement::Replace{value, pipe} => {
                 let lookup = lookup_value(value, params)?;
-                let mut current = lookup.clone();
-                for (ind, ii) in pipe.iter().enumerate() {
-                    current = execute_pipe(&current, &ii.name, ind, &value, pipes, io)?;
-                }
-                tostr(&current)
+                let piped = execute_pipes(lookup, &pipe, PipeInputSource::Value(&value), pipes, io)?;
+                tostr(&piped)
             },
             TemplateElement::File{snippet, filename, pipe} => {
                 let real_filename = format!("{}{}", if *snippet {"resources/snippets/"} else {""}, filename);
                 match io.read(&real_filename) {
-                    Ok(strr) => Ok(strr.to_owned()),
+                    Ok(strr) => {
+                        let piped = execute_pipes(
+                            &YamlValue::String(strr.to_owned()), pipe,
+                            PipeInputSource::File(&real_filename), pipes, io
+                        )?;
+                        tostr(&piped)
+                    },
                     Err(ee) => Err(TemplateError::FileError(ee))
                 }
             },
-            TemplateElement::FileAt{snippet, value, pipe} => {
+            TemplateElement::FileAt{snippet, value, value_pipe, contents_pipe} => {
                 let lookup = lookup_value(value, params)?;
-                let filename = tostr(lookup)?;
+                let piped_filename = execute_pipes(
+                    lookup, value_pipe, PipeInputSource::Value(&value), pipes, io
+                )?;
+                let filename = tostr(&piped_filename)?;
                 let real_filename = format!("{}{}", if *snippet {"resources/snippets/"} else {""}, filename);
                 match io.read(&real_filename) {
-                    Ok(strr) => Ok(strr.to_owned()),
+                    Ok(strr) => {
+                        let piped = execute_pipes(
+                            &YamlValue::String(strr.to_owned()), contents_pipe,
+                            PipeInputSource::FileFrom(&real_filename, &value), pipes, io
+                        )?;
+                        tostr(&piped)
+                    },
                     Err(ee) => Err(TemplateError::FileErrorDerivedFrom(ee, value.clone()))
                 }
             }

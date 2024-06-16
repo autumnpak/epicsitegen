@@ -223,3 +223,23 @@ fn replacement_with_pipe_template_3() {
 fn replacement_with_function_pipe_1() {
     accept("foo {{bar | testfn}} yay", "bar: {nah: yeah}", "foo bleh yay");
 }
+
+#[test]
+fn file_contents_piped() {
+    accept("foo {% file aaa.txt | test1 %} yay", "filename: bbb.txt", "foo um2 apple yay");
+}
+
+#[test]
+fn file_at_contents_piped() {
+    accept("foo {% file @ filename | test1 %} yay", "filename: bbb.txt", "foo um2 banana yay");
+}
+
+#[test]
+fn file_at_value_piped() {
+    accept("foo {% file @(filename | txt) %} yay", "filename: bbb", "foo banana yay");
+}
+
+#[test]
+fn file_at_both_piped() {
+    accept("foo {% file @(filename | txt) | test1 %} yay", "filename: bbb", "foo um2 banana yay");
+}

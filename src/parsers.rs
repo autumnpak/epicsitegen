@@ -47,7 +47,17 @@ fn parse_file_element(snippet: bool, pair: &mut Pairs<Rule>) -> TemplateElement 
       TemplateElement::FileAt{
         snippet,
         value: parse_value(filename.into_inner().next().unwrap()),
-        pipe: parse_pipes(&mut pair.next().unwrap().into_inner())
+        value_pipe: Vec::new(),
+        contents_pipe: parse_pipes(&mut pair.next().unwrap().into_inner())
+      }
+    },
+    Rule::file_at_with_pipes => {
+      let mut inner = filename.into_inner();
+      TemplateElement::FileAt{
+        snippet,
+        value: parse_value(inner.next().unwrap()),
+        value_pipe: parse_pipes(&mut inner.next().unwrap().into_inner()),
+        contents_pipe: parse_pipes(&mut pair.next().unwrap().into_inner()),
       }
     },
     _ => unreachable!("parse file element")

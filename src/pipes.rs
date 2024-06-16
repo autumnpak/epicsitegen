@@ -25,14 +25,47 @@ pub enum PipeDefinition {
     )
 }
 
+pub enum PipeInputSource<'a> {
+    Value(&'a TemplateValue),
+    File(&'a str),
+    FileFrom(&'a str, &'a TemplateValue),
+}
+
+impl<'a> std::fmt::Display for PipeInputSource<'a> {
+    fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PipeInputSource::Value(strr) => write!(ff, "{}", strr),
+            PipeInputSource::File(strr) => write!(ff, "the file {}", strr),
+            PipeInputSource::FileFrom(strr, val) => write!(ff, "the file {} from {}", strr, val),
+        }
+    }
+}
+
 pub type PipeMap = HashMap<String, PipeDefinition>;
 pub fn new_pipe_map() -> PipeMap { HashMap::new() }
+
+pub fn execute_pipes<'a>(
+    value: &'a YamlValue,
+    pipes: &Vec<Pipe>,
+    valuepath: PipeInputSource<'a>,
+    pipemap: &'a PipeMap,
+    io: &mut impl ReadsFiles
+) -> Result<YamlValue, TemplateError> {
+    let mut current = value.clone();
+    for (ind, ii) in pipes.iter().enumerate() {
+        current = execute_pipe(
+            &current, &ii.name, ind, 
+            &valuepath, pipemap, io
+        )?;
+    }
+    Ok(current)
+}
 
 pub fn execute_pipe<'a>(
     value: &'a YamlValue,
     pipe: &str,
     index: usize,
-    valuepath: &TemplateValue,
+    valuepath: &PipeInputSource<'a>,
     pipemap: &'a PipeMap,
     io: &mut impl ReadsFiles
 ) -> Result<YamlValue, TemplateError> {
