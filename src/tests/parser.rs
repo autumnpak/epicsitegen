@@ -80,18 +80,43 @@ fn Basic_replacement_with_spaces() {
 }
 
 #[test]
+fn Replacement_doesnt_exist() {
+    reject("foo {{barr}} yay", "bar: 123.456", TemplateError::KeyNotPresent("barr".to_owned()));
+}
+
+#[test]
 fn Replacement_with_field_access() {
     accept("foo {{bar.test}} yay", "bar: \n  test: something", "foo something yay");
 }
 
 #[test]
-fn Replacement_with_bad_field_access() {
-    accept("foo {{bar.test}} yay", "bar: \n  test: something", "foo something yay");
+fn Missing_field_access() {
+    reject("foo {{bar.testt}} yay", "bar: \n  test: something", TemplateError::FieldNotPresent("bar".to_owned(), "testt".to_owned()));
+}
+
+#[test]
+fn Bad_field_access() {
+    reject("foo {{bar.test.yayy}} yay", "bar: \n  test: something", TemplateError::FieldOnUnfieldable("bar.test".to_owned(), "yayy".to_owned()));
+}
+
+#[test]
+fn Deeper_bad_field_access() {
+    reject("foo {{bar.test.yayy}} yay", "bar: \n  test:\n    yay: uh", TemplateError::FieldNotPresent("bar.test".to_owned(), "yayy".to_owned()));
 }
 
 #[test]
 fn Replacement_with_index_access() {
     accept("foo {{bar[1]}} yay", "bar: [a, b, c, d]", "foo b yay");
+}
+
+#[test]
+fn Index_out_of_bounds() {
+    reject("foo {{bar[88]}} yay", "bar: [a, b, c, d]", TemplateError::IndexOOB("bar".to_owned(), 88));
+}
+
+#[test]
+fn Indexing_not_on_indexable() {
+    reject("foo {{bar[0]}} yay", "bar: 1", TemplateError::IndexOnUnindexable("bar".to_owned(), 0));
 }
 
 #[test]
@@ -145,8 +170,18 @@ fn for_loop_basic() {
 }
 
 #[test]
-fn for_loop_values() {
-    accept("foo {% for it in numbers, morenumbers %}{{it}} {% endfor %}yay", "numbers: [2, 4, 6]\nmorenumbers: [1, 3]", "foo 2 4 6 1 3 yay");
+fn for_loop_absent_key() {
+    reject("foo {% for it in numberss %}{{it}} {% endfor %}yay", "numbers: [2, 4, 6]", TemplateError::KeyNotPresent("numberss".to_owned()));
+}
+
+#[test]
+fn for_loop_0_values() {
+    accept("foo {% for it in numbers%}{{it}} {% endfor %}yay", "numbers: []", "foo yay");
+}
+
+#[test]
+fn for_loop_with_separator() {
+    accept("foo {% for it in numbers, morenumbers %}{{it}}{% sep %}, {% endfor %} yay", "numbers: [2, 4, 6]\nmorenumbers: [1, 3]", "foo 2, 4, 6, 1, 3 yay");
 }
 
 #[test]

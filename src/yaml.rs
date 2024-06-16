@@ -62,13 +62,13 @@ pub fn lookup_value<'a, 'b>(value: &'a TemplateValue, params: &'a YamlMap) -> Re
     fold_m(base, &value.accesses, |current, aa|
         match aa {
             TemplateValueAccess::Index(ii) => {
-                path = format!("{}[{}]", path, ii);
                 match current {
                     Yaml::Array(array) => {
                         let index = ii.to_owned();
                         if index >= array.len() {
                             Err(TemplateError::IndexOOB(path.to_owned(), ii.to_owned()))
                         } else {
+                            path = format!("{}[{}]", path, ii);
                             Ok(&array[index])
                         }
                     },
@@ -76,12 +76,14 @@ pub fn lookup_value<'a, 'b>(value: &'a TemplateValue, params: &'a YamlMap) -> Re
                 }
             } ,
             TemplateValueAccess::Field(ff) => {
-                path = format!("{}.{}", path, ff);
                 match current {
                     Yaml::Hash(hash) => {
                         match hash.get(&YamlString(ff.to_owned())) {
                             None => Err(TemplateError::FieldNotPresent(path.to_owned(), ff.to_owned())),
-                            Some(val) => Ok(val),
+                            Some(val) => {
+                                path = format!("{}.{}", path, ff);
+                                Ok(val)
+                            },
                         }
                     },
                     _ => Err(TemplateError::FieldOnUnfieldable(path.to_owned(), ff.to_owned())),

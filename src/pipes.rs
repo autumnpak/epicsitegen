@@ -4,7 +4,7 @@ use crate::yaml::{
 };
 use crate::io::{ReadsFiles, ReadsFilesImpl};
 use crate::template::{
-    TemplateElement, TemplateError, render_elements
+    TemplateElement, TemplateError, render_elements, TemplateValue
 };
 use std::collections::HashMap;
 
@@ -31,6 +31,8 @@ pub fn new_pipe_map() -> PipeMap { HashMap::new() }
 pub fn execute_pipe<'a>(
     value: &'a YamlValue,
     pipe: &str,
+    index: usize,
+    valuepath: &TemplateValue,
     pipemap: &'a PipeMap,
     io: &mut impl ReadsFiles
 ) -> Result<YamlValue, TemplateError> {
@@ -45,7 +47,8 @@ pub fn execute_pipe<'a>(
     let input = YamlValue::Hash(params_map.clone());
     match pipemap.get(pipe) {
         Some(PipeDefinition::Template(elements)) => {
-            let rendered = render_elements(elements, params_map, pipemap, io)?;
+            let rendered = render_elements(elements, params_map, pipemap, io)
+                .map_err(|ee| TemplateError::WithinTemplatePipe(Box::new(ee), pipe.to_owned(), index, valuepath.to_string()))?;
             Ok(YamlValue::String(rendered))
         },
         Some(PipeDefinition::Fn(func)) => {
@@ -54,7 +57,7 @@ pub fn execute_pipe<'a>(
             };
             match func(&input, pipemap, &ioimpl) {
                 Ok(strr) => Ok(strr),
-                Err(ee) => Err(TemplateError::PipeExecutionError(pipe.to_owned(), ee))
+                Err(ee) => Err(TemplateError::PipeExecutionError(ee, pipe.to_owned(), index, valuepath.to_string()))
             }
         },
         None => Err(TemplateError::PipeMissing(pipe.to_owned()))

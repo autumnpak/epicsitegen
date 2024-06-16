@@ -64,7 +64,8 @@ pub enum TemplateError {
     FieldOnUnfieldable(String, String),
     ForOnUnindexable(String),
     PipeMissing(String),
-    PipeExecutionError(String, String),
+    PipeExecutionError(String, String, usize, String),
+    WithinTemplatePipe(Box<TemplateError>, String, usize, String),
 }
 
 impl std::fmt::Display for TemplateValue {
@@ -100,7 +101,10 @@ impl std::fmt::Display for TemplateError {
             TemplateError::FieldOnUnfieldable(strr, idx) => write!(ff, "{} has no properties, so field {} can't be accessed", strr, idx),
             TemplateError::ForOnUnindexable(strr) => write!(ff, "Can't do a for loop on {} as it's not indexable", strr),
             TemplateError::PipeMissing(strr) => write!(ff, "Can't use pipe {} as it doesn't exist", strr),
-            TemplateError::PipeExecutionError(pipename, error) => write!(ff, "Error running pipe {}: {}", pipename, error),
+            TemplateError::PipeExecutionError(error, pipename, pipeindex, path) => 
+                write!(ff, "Error running pipe {} as pipe {} on {}: {}", pipename, pipeindex, path, error),
+            TemplateError::WithinTemplatePipe(error, pipename, pipeindex, path) => 
+                write!(ff, "{}\nwhen running templating pipe {} as pipe {} on {}", error, pipename, pipeindex, path),
         }
     }
 }
@@ -112,8 +116,8 @@ impl TemplateElement {
             TemplateElement::Replace{value, pipe} => {
                 let lookup = lookup_value(value, params)?;
                 let mut current = lookup.clone();
-                for ii in pipe {
-                    current = execute_pipe(&current, &ii.name, pipes, io)?;
+                for (ind, ii) in pipe.iter().enumerate() {
+                    current = execute_pipe(&current, &ii.name, ind, &value, pipes, io)?;
                 }
                 tostr(&current)
             },
@@ -171,8 +175,8 @@ enum ForIterationType<'a>{
 impl<'a> std::fmt::Display for ForIterationType<'a> {
     fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ForIterationType::FileAt(value, filename, size) => write!(ff, "{} at file {} derived from {}", size, filename, value),
-            ForIterationType::Filenames(filename, size) => write!(ff, "{} at file {}", size, filename),
+            ForIterationType::FileAt(value, filename, size) => write!(ff, "{} of file {} derived from {}", size, filename, value),
+            ForIterationType::Filenames(filename, size) => write!(ff, "{} of file {}", size, filename),
             ForIterationType::Values(value, size) => write!(ff, "{} of {}", size, value),
         }
     }
