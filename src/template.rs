@@ -14,6 +14,18 @@ use crate::pipes::{
     Pipe, PipeMap, execute_pipes, PipeInputSource
 };
 
+pub struct TemplateContext {
+    pub snippet_folder: String,
+    pub output_folder: String,
+}
+
+pub fn default_template_context() -> TemplateContext {
+    TemplateContext {
+        snippet_folder: "resources/snippets/".to_owned(),
+        output_folder:"build/".to_owned(),
+    } 
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TemplateElement {
     PlainText(String),
@@ -110,21 +122,21 @@ impl std::fmt::Display for TemplateError {
 }
 
 impl TemplateElement {
-    fn render<'a>(&'a self, params: &'a YamlMap, pipes: &'a PipeMap, io: &mut impl ReadsFiles) -> Result<String, TemplateError> {
+    fn render<'a>(&'a self, params: &'a YamlMap, pipes: &'a PipeMap, io: &mut impl ReadsFiles, context: &TemplateContext) -> Result<String, TemplateError> {
         match self {
             TemplateElement::PlainText(text) => Ok(text.clone()),
             TemplateElement::Replace{value, pipe} => {
                 let lookup = lookup_value(value, params)?;
-                let piped = execute_pipes(lookup, &pipe, PipeInputSource::Value(&value), pipes, io)?;
+                let piped = execute_pipes(lookup, &pipe, PipeInputSource::Value(&value), pipes, io, context)?;
                 tostr(&piped)
             },
             TemplateElement::File{snippet, filename, pipe} => {
-                let real_filename = format!("{}{}", if *snippet {"resources/snippets/"} else {""}, filename);
+                let real_filename = format!("{}{}", if *snippet {&context.snippet_folder} else {""}, filename);
                 match io.read(&real_filename) {
                     Ok(strr) => {
                         let piped = execute_pipes(
                             &YamlValue::String(strr.to_owned()), pipe,
-                            PipeInputSource::File(&real_filename), pipes, io
+                            PipeInputSource::File(&real_filename), pipes, io, context
                         )?;
                         tostr(&piped)
                     },
@@ -134,15 +146,15 @@ impl TemplateElement {
             TemplateElement::FileAt{snippet, value, value_pipe, contents_pipe} => {
                 let lookup = lookup_value(value, params)?;
                 let piped_filename = execute_pipes(
-                    lookup, value_pipe, PipeInputSource::Value(&value), pipes, io
+                    lookup, value_pipe, PipeInputSource::Value(&value), pipes, io, context
                 )?;
                 let filename = tostr(&piped_filename)?;
-                let real_filename = format!("{}{}", if *snippet {"resources/snippets/"} else {""}, filename);
+                let real_filename = format!("{}{}", if *snippet {&context.snippet_folder} else {""}, filename);
                 match io.read(&real_filename) {
                     Ok(strr) => {
                         let piped = execute_pipes(
                             &YamlValue::String(strr.to_owned()), contents_pipe,
-                            PipeInputSource::FileFrom(&real_filename, &value), pipes, io
+                            PipeInputSource::FileFrom(&real_filename, &value), pipes, io, context
                         )?;
                         tostr(&piped)
                     },
@@ -152,12 +164,12 @@ impl TemplateElement {
             TemplateElement::IfExists{value, when_true, when_false} => {
                 let lookup = lookup_value(value, params);
                 match lookup {
-                    Ok(..) => render_elements(when_true, params, pipes, io)
+                    Ok(..) => render_elements(when_true, params, pipes, io, context)
                         .map_err(|ee| TemplateError::InIfExistsLoop(Box::new(ee), value.clone(), true)),
                     Err(ee) => match ee {
                         TemplateError::KeyNotPresent(..) |
                         TemplateError::FieldNotPresent(..) |
-                        TemplateError::IndexOOB(..) => render_elements(when_false, params, pipes, io)
+                        TemplateError::IndexOOB(..) => render_elements(when_false, params, pipes, io, context)
                             .map_err(|ee| TemplateError::InIfExistsLoop(Box::new(ee), value.clone(), false)),
                         _ => Err(ee)
                     }
@@ -168,9 +180,10 @@ impl TemplateElement {
                 let mapped: Vec<String> = map_m(over, |ii| {
                     let mut new_params = params.clone();
                     insert_value(&mut new_params, &name, ii.0.clone());
-                    render_elements(main, &new_params, pipes, io).map_err(|ee| TemplateError::OnForLoopIteration(Box::new(ee), ii.1.to_string()))
+                    render_elements(main, &new_params, pipes, io, context)
+                        .map_err(|ee| TemplateError::OnForLoopIteration(Box::new(ee), ii.1.to_string()))
                 })?;
-                let sep = render_elements(separator, params, pipes, io)?;
+                let sep = render_elements(separator, params, pipes, io, context)?;
                 Ok(mapped.join(&sep))
             }
         }
@@ -237,10 +250,11 @@ pub fn render_elements<'a>(
     elements: &'a Vec<TemplateElement>,
     params: &'a YamlMap,
     pipes: &'a PipeMap,
-    io: &mut impl ReadsFiles
+    io: &mut impl ReadsFiles,
+    context: &TemplateContext
 ) -> Result<String, TemplateError> {
     elements.iter().try_fold("".to_owned(), |acc, ii| {
-        match ii.render(params, pipes, io) {
+        match ii.render(params, pipes, io, context) {
             err @ Err(..) => err,
             Ok(result) => {
                 let mut string = acc.to_owned();
@@ -255,10 +269,11 @@ pub fn render<'a>(
     input: &'a str,
     params: &'a YamlMap,
     pipes: &'a PipeMap,
-    io: &mut impl ReadsFiles
+    io: &mut impl ReadsFiles,
+    context: &TemplateContext
 ) -> Result<String, TemplateError> {
     match parse_template_string(input) {
         Err(ee) => Err(TemplateError::ParseError(ee.to_string())),
-        Ok(elements) => render_elements(&elements, params, pipes, io)
+        Ok(elements) => render_elements(&elements, params, pipes, io, context)
     }
 }

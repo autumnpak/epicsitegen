@@ -4,7 +4,7 @@ use crate::yaml::{
 };
 use crate::io::{ReadsFiles, ReadsFilesImpl};
 use crate::template::{
-    TemplateElement, TemplateError, render_elements, TemplateValue
+    TemplateElement, TemplateError, render_elements, TemplateValue, TemplateContext
 };
 use std::collections::HashMap;
 
@@ -49,13 +49,14 @@ pub fn execute_pipes<'a>(
     pipes: &Vec<Pipe>,
     valuepath: PipeInputSource<'a>,
     pipemap: &'a PipeMap,
-    io: &mut impl ReadsFiles
+    io: &mut impl ReadsFiles,
+    context: &TemplateContext,
 ) -> Result<YamlValue, TemplateError> {
     let mut current = value.clone();
     for (ind, ii) in pipes.iter().enumerate() {
         current = execute_pipe(
             &current, &ii.name, ind, 
-            &valuepath, pipemap, io
+            &valuepath, pipemap, io, context,
         )?;
     }
     Ok(current)
@@ -67,7 +68,8 @@ pub fn execute_pipe<'a>(
     index: usize,
     valuepath: &PipeInputSource<'a>,
     pipemap: &'a PipeMap,
-    io: &mut impl ReadsFiles
+    io: &mut impl ReadsFiles,
+    context: &TemplateContext,
 ) -> Result<YamlValue, TemplateError> {
     let mut map = new_yaml_map();
     let params_map = match value {
@@ -80,7 +82,7 @@ pub fn execute_pipe<'a>(
     let input = YamlValue::Hash(params_map.clone());
     match pipemap.get(pipe) {
         Some(PipeDefinition::Template(elements)) => {
-            let rendered = render_elements(elements, params_map, pipemap, io)
+            let rendered = render_elements(elements, params_map, pipemap, io, context,)
                 .map_err(|ee| TemplateError::WithinTemplatePipe(Box::new(ee), pipe.to_owned(), index, valuepath.to_string()))?;
             Ok(YamlValue::String(rendered))
         },

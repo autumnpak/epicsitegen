@@ -1,6 +1,7 @@
-use crate::io::{ReadsFiles, FileError};
-use crate::build::{BuildAction, BuildMultiplePages};
+use crate::io::{ReadsFiles};
+use crate::build::{BuildAction, BuildMultiplePages, BuildError};
 use crate::yaml::{YamlMap};
+use crate::template::{default_template_context, TemplateError};
 use crate::tests::common::{TestFileCache, setup_io, setup_pipes};
 use yaml_rust2::{yaml::{Hash, Yaml}, YamlLoader};
 
@@ -8,7 +9,12 @@ fn runs(
     action: BuildAction,
     io: &mut impl ReadsFiles,
 ) {
-    assert_eq!(Ok(()), action.run(&setup_pipes(), io));
+    let render = action.run(&setup_pipes(), io, &default_template_context());
+    match render {
+        Err(BuildError::TemplateError(TemplateError::ParseError(ref ee))) => println!("{}", ee),
+        _ => ()
+    }
+    assert_eq!(Ok(()), render);
 }
 
 fn params(strr: &str) -> YamlMap {
@@ -24,6 +30,14 @@ fn Build_single_page() {
     runs(BuildAction::BuildPage{output: "out.txt".to_string(), input: "base01.txt".to_string(), params: params("bar: test")}, &mut io);
     assert_eq!(1, io.written.len());
     io.assert_written("out.txt", "foo test yay");
+}
+
+#[test]
+fn Single_page_context() {
+    let mut io = setup_io();
+    runs(BuildAction::BuildPage{output: "blah/um/out.txt".to_string(), input: "base02.txt".to_string(), params: params("bar: test")}, &mut io);
+    assert_eq!(1, io.written.len());
+    io.assert_written("blah/um/out.txt", "base02.txt blah/um/out.txt build/ build/blah/um/out.txt ../../");
 }
 
 #[test]

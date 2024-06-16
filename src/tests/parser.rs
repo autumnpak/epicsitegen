@@ -1,11 +1,6 @@
-use crate::template::{render, TemplateError};
-use crate::pipes::{PipeMap, PipeDefinition, new_pipe_map};
-use crate::parsers::{parse_template_string};
-use crate::io::{ReadsFiles, FileError};
-use crate::yaml::{load_yaml, YamlValue, YamlFileError};
-use yaml_rust2::{yaml::{Hash, Yaml}, YamlLoader};
-use std::collections::HashMap;
-use crate::tests::common::{TestFileCache, setup_io, setup_pipes};
+use crate::template::{render, TemplateError, default_template_context};
+use yaml_rust2::{yaml::{Hash,}, YamlLoader};
+use crate::tests::common::{setup_io, setup_pipes};
 
 fn accept(
     input: &str,
@@ -15,7 +10,7 @@ fn accept(
     let parsed = YamlLoader::load_from_str(params).unwrap();
     let doc = &parsed[0];
     let pp: &Hash = doc.as_hash().expect("not a hash map?");
-    let render = render(input, &pp, &setup_pipes(), &mut setup_io());
+    let render = render(input, &pp, &setup_pipes(), &mut setup_io(), &default_template_context());
     match render {
         Err(TemplateError::ParseError(ref ee)) => println!("{}", ee),
         _ => ()
@@ -31,7 +26,7 @@ fn reject(
     let parsed = YamlLoader::load_from_str(params).unwrap();
     let doc = &parsed[0];
     let pp: &Hash = doc.as_hash().expect("not a hash map?");
-    let render = render(input, &pp, &setup_pipes(), &mut setup_io());
+    let render = render(input, &pp, &setup_pipes(), &mut setup_io(), &default_template_context());
     match render {
         Err(TemplateError::ParseError(ref ee)) => println!("{}", ee),
         _ => ()

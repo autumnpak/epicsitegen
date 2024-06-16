@@ -1,9 +1,8 @@
-use crate::template::{render, TemplateError};
 use crate::pipes::{PipeMap, PipeDefinition, new_pipe_map};
 use crate::parsers::{parse_template_string};
 use crate::io::{ReadsFiles, FileError};
 use crate::yaml::{load_yaml, YamlValue, YamlFileError};
-use yaml_rust2::{yaml::{Hash, Yaml}, YamlLoader};
+use yaml_rust2::{yaml::{Yaml},};
 use std::collections::HashMap;
 
 pub struct TestFileCache {
@@ -40,7 +39,7 @@ impl ReadsFiles for TestFileCache {
         self.written.insert(filename.to_owned(), contents.to_owned());
         Ok(())
     }
-    fn copy_files(&self, from: &str, to: &str) -> Result<(), FileError> {
+    fn copy_files(&self, _from: &str, _to: &str) -> Result<(), FileError> {
         Ok(())
     }
 }
@@ -56,6 +55,7 @@ pub fn setup_io() -> TestFileCache {
     files.insert("entry1.yaml".to_string(), "[9, 8]".to_string());
     files.insert("entry2.yaml".to_string(), "[\"asd\", \"fgh\"]".to_string());
     files.insert("base01.txt".to_string(), "foo {{bar}} yay".to_string());
+    files.insert("base02.txt".to_string(), "{{_input}} {{_output}} {{_outputfolder}} {{_outputfull}} {{_dots}}".to_string());
     TestFileCache{files, yamls: HashMap::new(), written: HashMap::new()}
 }
 
@@ -65,7 +65,7 @@ pub fn setup_pipes() -> PipeMap {
     pipemap.insert("test1".to_string(), PipeDefinition::Template(parse_template_string("um2 {{it}}").unwrap()));
     pipemap.insert("test2".to_string(), PipeDefinition::Template(parse_template_string("um3 {{nah}}").unwrap()));
     pipemap.insert("txt".to_string(), PipeDefinition::Template(parse_template_string("{{it}}.txt").unwrap()));
-    pipemap.insert("testfn".to_string(), PipeDefinition::Fn(|input, pipes, io| Ok(Yaml::String("bleh".to_owned()))));
+    pipemap.insert("testfn".to_string(), PipeDefinition::Fn(|_input, _pipes, _io| Ok(Yaml::String("bleh".to_owned()))));
     pipemap
 }
 
