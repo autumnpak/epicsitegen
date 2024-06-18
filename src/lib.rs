@@ -5,4 +5,5 @@ pub mod io;
 pub mod utils;
 pub mod pipes;
 pub mod build;
+pub mod layout;
 pub mod tests;

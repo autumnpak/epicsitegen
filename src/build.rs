@@ -58,6 +58,8 @@ pub struct SourcedParams(YamlMap, ParamsSource, YamlMap); //params, source, mapp
 pub struct SourcedParamsWithFiles(YamlMap, ParamsSource, String, String); //params, source, input,
                                                                           //output
 
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuildAction {
     BuildPage {output: String, input: String, params: YamlMap},
     BuildMultiplePages {
@@ -67,6 +69,7 @@ pub enum BuildAction {
     CopyFiles {to: String, from: String},
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuildMultiplePages {
     pub files: Vec<String>,
     pub params: Vec<YamlMap>,
