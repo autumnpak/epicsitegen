@@ -160,6 +160,26 @@ fn if_exists_false_else() {
 }
 
 #[test]
+fn lookup_catcher_true() {
+    accept("foo {%?}{{filename}}{&}no filename{?%} yay", "filename: bbb.txt", "foo bbb.txt yay");
+}
+
+#[test]
+fn lookup_catcher_false() {
+    accept("foo {%?}{{filename}}{&}no filename{?%} yay", "filenamee: bbb.txt", "foo no filename yay");
+}
+
+#[test]
+fn lookup_catcher_last_cant_find_anything() {
+    reject("foo {%?}{{filename}}{&}{{filename2}}{?%} yay", "filenamee: bbb.txt", TemplateError::KeyNotPresent("filename2".to_owned()));
+}
+
+#[test]
+fn lookup_catcher_propogates_other_errors() {
+    reject("foo {%?}{{filename.yeah}}{&}shouldnt be rendered{?%} yay", "filename: bbb.txt", TemplateError::FieldOnUnfieldable("filename".to_owned(), "yeah".to_owned()));
+}
+
+#[test]
 fn for_loop_basic() {
     accept("foo {% for it in numbers %}{{it}} {% endfor %}yay", "numbers: [2, 4, 6]", "foo 2 4 6 yay");
 }

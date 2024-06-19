@@ -29,6 +29,7 @@ fn parse_ast_node(pair: Pair<Rule>) -> TemplateElement {
     Rule::file_element => parse_file_element(false, &mut pair.into_inner()),
     Rule::if_exists => parse_if_exists_element(&mut pair.into_inner()),
     Rule::for_element => parse_for_element(&mut pair.into_inner()),
+    Rule::lookup_catcher => parse_catcher(&mut pair.into_inner()),
     _ => unreachable!("parse ast node"),
   }
 }
@@ -128,6 +129,10 @@ fn parse_for_element(pairs: &mut Pairs<Rule>) -> TemplateElement {
     Some(ss) => ss.into_inner().map(parse_ast_node).collect(),
   };
   TemplateElement::For{name, values, filenames, files_at, main: main.unwrap(), separator}
+}
+
+fn parse_catcher(pairs: &mut Pairs<Rule>) -> TemplateElement {
+  TemplateElement::LookupCatcher(pairs.map(|nn| nn.into_inner().map(parse_ast_node).collect()).collect())
 }
 
 pub fn parse_template_string(input: &str) -> Result<Vec<TemplateElement>, Error<Rule>> {

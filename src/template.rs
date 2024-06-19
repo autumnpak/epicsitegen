@@ -45,6 +45,7 @@ pub enum TemplateElement {
         main: Vec<TemplateElement>,
         separator: Vec<TemplateElement>
     },
+    LookupCatcher(Vec<Vec<TemplateElement>>),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -78,6 +79,7 @@ pub enum TemplateError {
     PipeMissing(String),
     PipeExecutionError(String, String, usize, String),
     WithinTemplatePipe(Box<TemplateError>, String, usize, String),
+    UnknownError,
 }
 
 impl std::fmt::Display for TemplateValue {
@@ -98,6 +100,7 @@ impl std::fmt::Display for TemplateValueAccess {
 impl std::fmt::Display for TemplateError {
     fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            TemplateError::UnknownError => write!(ff, "An unknown error occured."),
             TemplateError::FileError(err) => err.fmt(ff),
             TemplateError::FileErrorDerivedFrom(err, value) => write!(ff, "{} (derived from {})", err, value),
             TemplateError::YamlFileError(err) => err.fmt(ff),
@@ -174,6 +177,30 @@ impl TemplateElement {
                         _ => Err(ee)
                     }
                 }
+            }
+            TemplateElement::LookupCatcher(values) => {
+                let mut rendered: Result<String, TemplateError> = Err(TemplateError::UnknownError);
+                let mut stop = false;
+                let mut iter = values.iter();
+                while let Some(value) = iter.next() {
+                    if !stop && rendered.is_err() {
+                        match render_elements(value, params, pipes, io, context) {
+                            ee @ Err(TemplateError::KeyNotPresent(..)) |
+                            ee @ Err(TemplateError::FieldNotPresent(..)) |
+                            ee @ Err(TemplateError::IndexOOB(..)) => {
+                                rendered = ee;
+                            },
+                            ee @ Err(_) => {
+                                rendered = ee;
+                                stop = true;
+                            }
+                            aa @ Ok(_) => {
+                                rendered = aa;
+                            }
+                        }
+                    }
+                }
+                rendered
             }
             TemplateElement::For{name, values, filenames, files_at, main, separator, ..} => {
                 let over = for_make_iterable(params, values, filenames, files_at, io)?;
