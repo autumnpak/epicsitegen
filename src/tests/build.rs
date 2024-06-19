@@ -38,7 +38,7 @@ fn Build_single_page() {
     let mut io = setup_io();
     runs(BuildAction::BuildPage{output: "out.txt".to_string(), input: "base01.txt".to_string(), params: params("bar: test")}, &mut io);
     assert_eq!(1, io.written.len());
-    io.assert_written("out.txt", "foo test yay");
+    io.assert_written("build/out.txt", "foo test yay");
 }
 
 #[test]
@@ -46,7 +46,7 @@ fn Single_page_context() {
     let mut io = setup_io();
     runs(BuildAction::BuildPage{output: "blah/um/out.txt".to_string(), input: "base02.txt".to_string(), params: params("bar: test")}, &mut io);
     assert_eq!(1, io.written.len());
-    io.assert_written("blah/um/out.txt", "base02.txt blah/um/out.txt build/ build/blah/um/out.txt ../../");
+    io.assert_written("build/blah/um/out.txt", "base02.txt blah/um/out.txt build/ build/blah/um/out.txt ../../");
 }
 
 #[test]
@@ -76,6 +76,6 @@ fn Build_multiple_pages_not_from_files() {
         },
     ], descriptor: "uh".to_owned()}, &mut io);
     assert_eq!(2, io.written.len());
-    io.assert_written("out1.txt", "foo test yay");
-    io.assert_written("out2.txt", "foo testing yay");
+    io.assert_written("build/out1.txt", "foo test yay");
+    io.assert_written("build/out2.txt", "foo testing yay");
 }

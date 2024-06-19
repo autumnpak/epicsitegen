@@ -248,8 +248,9 @@ fn build_page(
     full_params.insert(YamlValue::String("_input".to_owned()), YamlValue::String(input.to_owned()));
     full_params.insert(YamlValue::String("_output".to_owned()), YamlValue::String(output.to_owned()));
     full_params.insert(YamlValue::String("_outputfolder".to_owned()), YamlValue::String(context.output_folder.to_owned()));
-    let fullpath: PathBuf = [&context.output_folder, output].iter().collect();
-    full_params.insert(YamlValue::String("_outputfull".to_owned()), YamlValue::String(String::from(fullpath.to_string_lossy())));
+    let fullpathbuf: PathBuf = [&context.output_folder, output].iter().collect();
+    let fullpath = String::from(fullpathbuf.to_string_lossy());
+    full_params.insert(YamlValue::String("_outputfull".to_owned()), YamlValue::String(fullpath.clone()));
     let mut outpath: PathBuf = output.into();
     outpath.pop();
     let basepath: PathBuf = ".".into();
@@ -258,5 +259,5 @@ fn build_page(
     full_params.insert(YamlValue::String("_dots".to_owned()), YamlValue::String(String::from(&dotstring[0..dotstring.len() - 1])));
     let rendered = render(&contents, &full_params, pipes, io, context)
         .map_err(|xx| BuildError::TemplateError(xx))?;
-    io.write(output, &rendered).map_err(|xx| BuildError::FileError(xx))
+    io.write(&fullpath, &rendered).map_err(|xx| BuildError::FileError(xx))
 }

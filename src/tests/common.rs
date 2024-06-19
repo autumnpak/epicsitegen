@@ -13,6 +13,7 @@ pub struct TestFileCache {
 
 impl TestFileCache {
     pub fn assert_written(&self, filename: &str, contents: &str) {
+        println!("{:?}", self.written);
         assert_eq!(
             self.written.get(filename)
                 .expect(&format!("{} was not written to", filename)),
