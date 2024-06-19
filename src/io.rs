@@ -50,6 +50,14 @@ pub struct FileCache {
     files: HashMap<String, String>,
     yamls: HashMap<String, YamlValue>,
 }
+impl FileCache {
+    pub fn new() -> FileCache {
+        FileCache {
+            files: HashMap::new(),
+            yamls: HashMap::new(),
+        }
+    }
+}
 
 fn read_file(filename: &str) -> Result<String, FileError> {
     if Path::exists(Path::new(filename)) {
