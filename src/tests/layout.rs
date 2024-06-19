@@ -32,6 +32,7 @@ fn parses_build_ok() {
 #[test]
 fn parses_build_multiple_ok() {
     let parsed = layout_string_to_buildactions("- type: build-multiple
+  description: uh
   default: {um: yeah}
   with:
     - files: [yeah]
@@ -43,12 +44,13 @@ fn parses_build_multiple_ok() {
             files: vec!["yeah".to_owned()],
             params: vec![params("{um2: yeah2}")],
         },
-    ]}]), parsed);
+    ], descriptor: "uh".to_owned()}]), parsed);
 }
 
 #[test]
 fn build_multiple_allows_no_files() {
     let parsed = layout_string_to_buildactions("- type: build-multiple
+  description: uh
   default: {um: yeah}
   with:
     - params: [{um2: yeah2}]
@@ -59,12 +61,13 @@ fn build_multiple_allows_no_files() {
             files: vec![],
             params: vec![params("{um2: yeah2}")],
         },
-    ]}]), parsed);
+    ], descriptor: "uh".to_owned()}]), parsed);
 }
 
 #[test]
 fn build_multiple_allows_no_params() {
     let parsed = layout_string_to_buildactions("- type: build-multiple
+  description: uh
   default: {um: yeah}
   with:
     - files: [yeah]
@@ -75,12 +78,13 @@ fn build_multiple_allows_no_params() {
             files: vec!["yeah".to_owned()],
             params: vec![],
         },
-    ]}]), parsed);
+    ], descriptor: "uh".to_owned()}]), parsed);
 }
 
 #[test]
 fn build_multiple_allows_no_mapping() {
     let parsed = layout_string_to_buildactions("- type: build-multiple
+  description: uh
   default: {um: yeah}
   with:
     - files: [yeah]
@@ -91,5 +95,5 @@ fn build_multiple_allows_no_mapping() {
             files: vec!["yeah".to_owned()],
             params: vec![params("{um2: yeah2}")],
         },
-    ]}]), parsed);
+    ], descriptor: "uh".to_owned()}]), parsed);
 }

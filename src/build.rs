@@ -1,3 +1,4 @@
+use std::time::{SystemTime, UNIX_EPOCH};
 use crate::yaml::{YamlMap, YamlValue, YamlFileError, lookup_str_from_yaml_map};
 use crate::template::{TemplateError, render, render_elements, TemplateContext};
 use crate::pipes::{PipeMap};
@@ -54,18 +55,20 @@ impl std::fmt::Display for ParamsSource {
 #[derive(Debug, PartialEq, Eq)]
 pub struct SourcedParams(YamlMap, ParamsSource, YamlMap); //params, source, mapping
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct SourcedParamsWithFiles(YamlMap, ParamsSource, String, String); //params, source, input,
-                                                                          //output
-
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuildAction {
     BuildPage {output: String, input: String, params: YamlMap},
     BuildMultiplePages {
+        descriptor: String,
         default_params: YamlMap,
         on: Vec<BuildMultiplePages>,
     },
+    CopyFiles {to: String, from: String},
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BuildActionExpanded {
+    BuildPage {output: String, input: String, params: YamlMap, source: Option<ParamsSource>},
     CopyFiles {to: String, from: String},
 }
 
@@ -77,21 +80,73 @@ pub struct BuildMultiplePages {
 }
 
 impl BuildAction {
-    pub fn run(&self, pipes: &PipeMap, io: &mut impl ReadsFiles, context: &TemplateContext) -> Result<(), BuildError> {
+    pub fn expand(&self, pipes: &PipeMap, io: &mut impl ReadsFiles, context: &TemplateContext) -> Result<Vec<BuildActionExpanded>, BuildError> {
         match self {
             BuildAction::BuildPage{output, input, params} => {
-                build_page(&input, &output, params, pipes, io, context)
+                Ok(vec![BuildActionExpanded::BuildPage{
+                    input: input.to_owned(),
+                    output: output.to_owned(),
+                    params: params.to_owned(),
+                    source: None
+                }])
             },
-            BuildAction::BuildMultiplePages{default_params, on} => {
+            BuildAction::CopyFiles{to, from} => {
+                Ok(vec![BuildActionExpanded::CopyFiles{
+                    to: to.to_owned(),
+                    from: from.to_owned(),
+                }])
+            },
+            BuildAction::BuildMultiplePages{default_params, on, ..} => {
                 let mut entries: Vec<SourcedParams> = vec![];
                 for mut source in map_m_ref_index(on, |idx, xx| build_multiple_pages_files(xx, idx, io))? {
                     entries.append(&mut source);
                 };
-                let mapped = build_multiple_pages_map_params(default_params, entries, pipes, io, context)?;
-                build_multiple_pages_actually_build(mapped, pipes, io, context)
+                build_multiple_pages_map_params(default_params, entries, pipes, io, context)
             },
-            BuildAction::CopyFiles{to, from} => {
+        }
+    }
+
+    pub fn message_expansion_failed(&self, time: u128, error: BuildError) -> String {
+        match self {
+            BuildAction::BuildMultiplePages{descriptor, ..} => {
+                format!("Expanding {} failed after {}ms:\n    {}", descriptor, time, str::replace(&error.to_string(), "\n", "\n    "))
+            },
+            _ => unreachable!() //nothing else fails to expand so this doesnt matter
+        }
+    }
+}
+
+impl BuildActionExpanded {
+    pub fn run(&self, pipes: &PipeMap, io: &mut impl ReadsFiles, context: &TemplateContext) -> Result<(), BuildError> {
+        match self {
+            BuildActionExpanded::BuildPage{output, input, params, source} => {
+                build_page(&input, &output, params, pipes, io, context)
+                    .map_err(|ee| if let Some(ss) = source { BuildError::BMSourced(ss.to_owned(), Box::new(ee)) } else {ee} )
+            },
+            BuildActionExpanded::CopyFiles{to, from} => {
                 io.copy_files(from, to).map_err(|ee| BuildError::FileError(ee))
+            },
+        }
+    }
+
+    pub fn message_run_succeeded(&self, time: u128) -> String {
+        match self {
+            BuildActionExpanded::BuildPage{output, ..} => {
+                format!("Successfully built {} in {}ms", output, time)
+            },
+            BuildActionExpanded::CopyFiles{to, from} => {
+                format!("Successfully copied {} to {} in {}ms", from, to, time)
+            },
+        }
+    }
+
+    pub fn message_run_failed(&self, time: u128, error: BuildError) -> String {
+        match self {
+            BuildActionExpanded::BuildPage{output, ..} => {
+                format!("Building {} failed after {}ms:\n    {}", output, time, str::replace(&error.to_string(), "\n", "\n    "))
+            },
+            BuildActionExpanded::CopyFiles{to, from} => {
+                format!("Copying {} to {} failed after {}ms:\n    {}", from, to, time, str::replace(&error.to_string(), "\n", "\n    "))
             },
         }
     }
@@ -131,14 +186,14 @@ fn build_multiple_pages_map_params(
     pipes: &PipeMap,
     io: &mut impl ReadsFiles,
     context: &TemplateContext,
-) -> Result<Vec<SourcedParamsWithFiles>, BuildError> {
+) -> Result<Vec<BuildActionExpanded>, BuildError> {
     map_m_mut(values, |ii: SourcedParams| {
         let mut params: YamlMap = default_params.to_owned();
         params.extend(ii.0);
         let mapped = apply_mapping(&params, &ii.2, &ii.1, pipes, io, context)?;
         let output = lookup_str_from_yaml_map("output", &mapped).map_err(|_| BuildError::BMOutputNotSpecified(ii.1.clone()))?;
         let input = lookup_str_from_yaml_map("input", &mapped).map_err(|_| BuildError::BMInputNotSpecified(output.to_owned(), ii.1.clone()))?;
-        Ok(SourcedParamsWithFiles(mapped.to_owned(), ii.1, input.to_owned(), output.to_owned()))
+        Ok(BuildActionExpanded::BuildPage{input: input.to_owned(), output: output.to_owned(), params: mapped.to_owned(), source: Some(ii.1)})
     })
 }
 
@@ -175,19 +230,6 @@ pub fn apply_mapping<'a>(
         }
     }
     Ok(mapp)
-}
-
-fn build_multiple_pages_actually_build(
-    values: Vec<SourcedParamsWithFiles>,
-    pipes: &PipeMap,
-    io: &mut impl ReadsFiles,
-    context: &TemplateContext,
-) -> Result<(), BuildError> {
-    fold_m_mut((), values, |_, ii: SourcedParamsWithFiles| {
-        build_page(&ii.2, &ii.3, &ii.0, pipes, io, context)
-            .map_err(|ee| BuildError::BMSourced(ii.1.clone(), Box::new(ee)))
-    })?;
-    Ok(())
 }
 
 fn build_page(

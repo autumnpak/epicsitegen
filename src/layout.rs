@@ -1,11 +1,12 @@
 use crate::yaml::{YamlValue, YamlMap, load_yaml, YamlFileError, new_yaml_map};
-use crate::utils::{map_m, map_m_ref_index};
+use crate::utils::{map_m, map_m_ref_index, map_m_index};
 use crate::build::{BuildAction, BuildMultiplePages};
 use crate::io::{ReadsFiles};
 use yaml_rust2::scanner::ScanError;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum LayoutError {
+    AtEntry(Box<LayoutError>, usize),
     YamlParsing(ScanError),
     YamlFileError(YamlFileError),
     UnexpectedType(String),
@@ -15,6 +16,23 @@ pub enum LayoutError {
     KeyNotMap(String),
     EntryNotHash(String, usize),
     EntryNotString(String, usize),
+}
+
+impl std::fmt::Display for LayoutError {
+    fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LayoutError::AtEntry(ee, ind) => write!(ff, "At action {}: {}", ind, ee),
+            LayoutError::YamlParsing(ee) => ee.fmt(ff),
+            LayoutError::YamlFileError(ee) => ee.fmt(ff),
+            LayoutError::UnexpectedType(ee) => write!(ff, "\"{}\" is not a valid type of build action", ee),
+            LayoutError::MissingKey(ee) => write!(ff, "The key \"{}\" is missing", ee),
+            LayoutError::KeyNotString(ee) => write!(ff, "The key \"{}\" is not a string", ee),
+            LayoutError::KeyNotArray(ee) => write!(ff, "The key \"{}\" is not an array", ee),
+            LayoutError::KeyNotMap(ee) => write!(ff, "The key \"{}\" is not a map", ee),
+            LayoutError::EntryNotHash(ee, pos) => write!(ff, "Entry {} within the array at \"{}\" is not a map", pos, ee),
+            LayoutError::EntryNotString(ee, pos) => write!(ff, "Entry {} within the array at \"{}\" is not a string", pos, ee),
+        }
+    }
 }
 
 pub fn layout_file_to_buildactions(
@@ -36,7 +54,7 @@ pub fn layout_file_parsed_to_buildactions(
     actions: &YamlValue,
 ) -> Result<Vec<BuildAction>, LayoutError> {
     let arr = ensure_array_of_hash(Ok(actions), "(base value)")?;
-    map_m(arr, |aa| yaml_map_to_buildaction(aa))
+    map_m_index(arr, |ind, aa| yaml_map_to_buildaction(aa).map_err(|ee| LayoutError::AtEntry(Box::new(ee), ind)))
 }
 
 pub fn yaml_map_to_buildaction<'a>(
@@ -58,6 +76,7 @@ pub fn yaml_map_to_buildaction<'a>(
             })
         },
         "build-multiple" => {
+            let descriptor = lookup_yaml_str("description", mapping)?;
             let default = lookup_yaml_hash("default", mapping)?;
             let with_value_raw = lookup_yaml("with", mapping);
             let with_value = ensure_array_of_hash(with_value_raw, "with")?;
@@ -81,7 +100,7 @@ pub fn yaml_map_to_buildaction<'a>(
                 })
             })?;
             Ok(BuildAction::BuildMultiplePages{
-                on: withs, default_params: default.to_owned()
+                on: withs, default_params: default.to_owned(), descriptor: descriptor.to_owned()
             })
         },
         _ => Err(LayoutError::UnexpectedType(actiontype.to_owned())),
