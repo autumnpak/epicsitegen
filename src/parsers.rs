@@ -92,12 +92,16 @@ fn parse_value(pair: Pair<Rule>) -> TemplateValue {
 }
 
 fn parse_pipes(pairs: &mut Pairs<Rule>) -> Vec<Pipe> {
-  fn parse_pipe(pairs: &mut Pairs<Rule>) -> Pipe {
+  fn parse_named_pipe(pairs: &mut Pairs<Rule>) -> Pipe {
     let name = pairs.next().unwrap().as_str().to_owned();
     let params = pairs.map(|ii| ii.as_str().to_owned()).collect();
-    Pipe{name, params}
+    Pipe::Named{name, params}
   }
-  pairs.map(|xx| parse_pipe(&mut xx.into_inner())).collect()
+  pairs.map(|xx| match xx.as_rule() {
+    Rule::pipe_named => parse_named_pipe(&mut xx.into_inner()),
+    Rule::pipe_template => Pipe::Template,
+    _ => unreachable!("pipe types"),
+  }).collect()
 }
 
 fn parse_filenames(pairs: &mut Pairs<Rule>) -> Vec<String> {
@@ -105,7 +109,7 @@ fn parse_filenames(pairs: &mut Pairs<Rule>) -> Vec<String> {
 }
 
 fn parse_values(pairs: &mut Pairs<Rule>) -> Vec<TemplateValue> {
-  pairs.map(|ii| { println!("|{}|", ii.as_str()); parse_value(ii) }).collect()
+  pairs.map(|ii| { parse_value(ii) }).collect()
 }
 
 fn parse_for_element(pairs: &mut Pairs<Rule>) -> TemplateElement {

@@ -240,6 +240,11 @@ fn replacement_with_function_pipe_1() {
 }
 
 #[test]
+fn replacement_with_pipe_default_template() {
+    accept("foo {{bar $}} yay", "yeah: nah\nbar: \"um {{yeah}}\"", "foo um nah yay");
+}
+
+#[test]
 fn file_contents_piped() {
     accept("foo {% file aaa.txt | test1 %} yay", "filename: bbb.txt", "foo um2 apple yay");
 }
@@ -257,4 +262,24 @@ fn file_at_value_piped() {
 #[test]
 fn file_at_both_piped() {
     accept("foo {% file @(filename | txt) | test1 %} yay", "filename: bbb", "foo um2 banana yay");
+}
+
+#[test]
+fn file_contents_piped_default() {
+    accept("foopiped {% file aaa.txt $ %} yay", "filename: bbb.txt", "foopiped apple yay");
+}
+
+#[test]
+fn file_at_contents_piped_default() {
+    accept("foopiped {% file @ filename $ %} yay", "filename: bbb.txt", "foopiped banana yay");
+}
+
+#[test]
+fn snippet_contents_piped_default() {
+    accept("foopiped {% snippet aaa.txt $ %} yay", "filename: bbb.txt", "foopiped sapple yay");
+}
+
+#[test]
+fn snippet_at_contents_piped_default() {
+    accept("foopiped {% snippet @ filename $ %} yay", "filename: bbb.txt", "foopiped sbanana yay");
 }

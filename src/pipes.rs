@@ -1,17 +1,19 @@
 use crate::yaml::{
     YamlValue,
+    YamlMap,
     new_yaml_map,
+    tostr
 };
 use crate::io::{ReadsFiles, ReadsFilesImpl};
 use crate::template::{
-    TemplateElement, TemplateError, render_elements, TemplateValue, TemplateContext
+    TemplateElement, TemplateError, render, render_elements, TemplateValue, TemplateContext
 };
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Pipe {
-    pub name: String,
-    pub params: Vec<String>
+pub enum Pipe {
+    Named{name: String, params: Vec<String>},
+    Template
 }
 
 pub enum PipeDefinition {
@@ -47,6 +49,7 @@ pub fn new_pipe_map() -> PipeMap { HashMap::new() }
 pub fn execute_pipes<'a>(
     value: &'a YamlValue,
     pipes: &Vec<Pipe>,
+    params: &'a YamlMap,
     valuepath: PipeInputSource<'a>,
     pipemap: &'a PipeMap,
     io: &mut impl ReadsFiles,
@@ -54,15 +57,25 @@ pub fn execute_pipes<'a>(
 ) -> Result<YamlValue, TemplateError> {
     let mut current = value.clone();
     for (ind, ii) in pipes.iter().enumerate() {
-        current = execute_pipe(
-            &current, &ii.name, ind, 
-            &valuepath, pipemap, io, context,
-        )?;
+        match ii {
+            Pipe::Named{name, ..} => {
+                current = execute_named_pipe(
+                    &current, name, ind, 
+                    &valuepath, pipemap, io, context,
+                )?;
+            },
+            Pipe::Template => {
+                current = YamlValue::String(render(&tostr(value)?, params, pipemap, io, context)
+                    .map_err(|ee| TemplateError::WithinTemplatePipe(
+                            Box::new(ee), ind, valuepath.to_string()
+                    ))?);
+            }
+        }
     }
     Ok(current)
 }
 
-pub fn execute_pipe<'a>(
+pub fn execute_named_pipe<'a>(
     value: &'a YamlValue,
     pipe: &str,
     index: usize,
@@ -83,7 +96,7 @@ pub fn execute_pipe<'a>(
     match pipemap.get(pipe) {
         Some(PipeDefinition::Template(elements)) => {
             let rendered = render_elements(elements, params_map, pipemap, io, context,)
-                .map_err(|ee| TemplateError::WithinTemplatePipe(Box::new(ee), pipe.to_owned(), index, valuepath.to_string()))?;
+                .map_err(|ee| TemplateError::WithinTemplateNamedPipe(Box::new(ee), pipe.to_owned(), index, valuepath.to_string()))?;
             Ok(YamlValue::String(rendered))
         },
         Some(PipeDefinition::Fn(func)) => {

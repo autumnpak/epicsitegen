@@ -78,7 +78,8 @@ pub enum TemplateError {
     ForOnUnindexable(String),
     PipeMissing(String),
     PipeExecutionError(String, String, usize, String),
-    WithinTemplatePipe(Box<TemplateError>, String, usize, String),
+    WithinTemplatePipe(Box<TemplateError>, usize, String),
+    WithinTemplateNamedPipe(Box<TemplateError>, String, usize, String),
     UnknownError,
 }
 
@@ -118,7 +119,9 @@ impl std::fmt::Display for TemplateError {
             TemplateError::PipeMissing(strr) => write!(ff, "Can't use pipe {} as it doesn't exist", strr),
             TemplateError::PipeExecutionError(error, pipename, pipeindex, path) => 
                 write!(ff, "Error running pipe {} as pipe {} on {}: {}", pipename, pipeindex, path, error),
-            TemplateError::WithinTemplatePipe(error, pipename, pipeindex, path) => 
+            TemplateError::WithinTemplatePipe(error, pipeindex, path) => 
+                write!(ff, "{}\nwhen running the default templating pipe as pipe {} on {}", error, pipeindex, path),
+            TemplateError::WithinTemplateNamedPipe(error, pipename, pipeindex, path) => 
                 write!(ff, "{}\nwhen running templating pipe {} as pipe {} on {}", error, pipename, pipeindex, path),
         }
     }
@@ -130,7 +133,7 @@ impl TemplateElement {
             TemplateElement::PlainText(text) => Ok(text.clone()),
             TemplateElement::Replace{value, pipe} => {
                 let lookup = lookup_value(value, params)?;
-                let piped = execute_pipes(lookup, &pipe, PipeInputSource::Value(&value), pipes, io, context)?;
+                let piped = execute_pipes(lookup, &pipe, params, PipeInputSource::Value(&value), pipes, io, context)?;
                 tostr(&piped)
             },
             TemplateElement::File{snippet, filename, pipe} => {
@@ -138,7 +141,7 @@ impl TemplateElement {
                 match io.read(&real_filename) {
                     Ok(strr) => {
                         let piped = execute_pipes(
-                            &YamlValue::String(strr.to_owned()), pipe,
+                            &YamlValue::String(strr.to_owned()), pipe, params,
                             PipeInputSource::File(&real_filename), pipes, io, context
                         )?;
                         tostr(&piped)
@@ -149,14 +152,14 @@ impl TemplateElement {
             TemplateElement::FileAt{snippet, value, value_pipe, contents_pipe} => {
                 let lookup = lookup_value(value, params)?;
                 let piped_filename = execute_pipes(
-                    lookup, value_pipe, PipeInputSource::Value(&value), pipes, io, context
+                    lookup, value_pipe, params, PipeInputSource::Value(&value), pipes, io, context
                 )?;
                 let filename = tostr(&piped_filename)?;
                 let real_filename = format!("{}{}", if *snippet {&context.snippet_folder} else {""}, filename);
                 match io.read(&real_filename) {
                     Ok(strr) => {
                         let piped = execute_pipes(
-                            &YamlValue::String(strr.to_owned()), contents_pipe,
+                            &YamlValue::String(strr.to_owned()), contents_pipe, params,
                             PipeInputSource::FileFrom(&real_filename, &value), pipes, io, context
                         )?;
                         tostr(&piped)
