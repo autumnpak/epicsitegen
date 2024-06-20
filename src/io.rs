@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use std::fmt;
 use std::io;
+use std::time::{SystemTime, UNIX_EPOCH};
 use glob::{glob, Paths, GlobError};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -47,8 +48,8 @@ impl<'a> fmt::Display for ReadsFilesImpl<'a> {
 }
 
 pub struct FileCache {
-    files: HashMap<String, String>,
-    yamls: HashMap<String, YamlValue>,
+    files: HashMap<String, (u128, String)>,
+    yamls: HashMap<String, (u128, YamlValue)>,
 }
 impl FileCache {
     pub fn new() -> FileCache {
@@ -72,21 +73,59 @@ fn read_file(filename: &str) -> Result<String, FileError> {
 
 impl ReadsFiles for FileCache {
     fn read(&mut self, filename: &str) -> Result<&str, FileError> {
-        Ok(match self.files.entry(filename.to_owned()) {
-            Entry::Occupied(ee) => ee.into_mut(),
-            Entry::Vacant(ee) => ee.insert(read_file(filename)?),
-        })
+        let got = match self.files.entry(filename.to_owned()) {
+            Entry::Occupied(mut ee) => {
+                let filetime = fs::metadata(filename).unwrap().modified().unwrap()
+                    .duration_since(UNIX_EPOCH).unwrap().as_millis();
+                let entry: &(u128, String) = ee.get();
+                if filetime >= entry.0 {
+                    ee.insert((
+                        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis(),
+                        read_file(filename)?
+                    ));
+                }
+                ee.into_mut()
+            },
+            Entry::Vacant(ee) => {
+                ee.insert((
+                    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis(),
+                    read_file(filename)?
+                ))
+            },
+        };
+        Ok(&got.1)
     }
 
     fn read_yaml(&mut self, filename: &str) -> Result<&YamlValue, YamlFileError> {
         let contentsref = self.read(filename).map_err(|xx| YamlFileError::File(xx))?;
         let contents = contentsref.to_owned();
-        Ok(match self.yamls.entry(filename.to_owned()) {
+        let got = match self.yamls.entry(filename.to_owned()) {
+            Entry::Occupied(mut ee) => {
+                let filetime = fs::metadata(filename).unwrap().modified().unwrap()
+                    .duration_since(UNIX_EPOCH).unwrap().as_millis();
+                let entry: &(u128, YamlValue) = ee.get();
+                if filetime >= entry.0 {
+                    ee.insert((
+                        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis(),
+                        load_yaml(&contents).map_err(|xx| YamlFileError::Yaml(xx))?
+                    ));
+                }
+                ee.into_mut()
+            },
+            Entry::Vacant(ee) => {
+                ee.insert((
+                    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis(),
+                    load_yaml(&contents).map_err(|xx| YamlFileError::Yaml(xx))?
+                ))
+            },
+        };
+        Ok(&got.1)
+        /*Ok(match self.yamls.entry(filename.to_owned()) {
             Entry::Occupied(ee) => ee.into_mut(),
             Entry::Vacant(ee) => {
-                ee.insert(load_yaml(&contents).map_err(|xx| YamlFileError::Yaml(xx))?)
+                ee.insert(l)
             }
-        })
+        })*/
     }
 
     fn write(&mut self, filename: &str, contents: &str) -> Result<(), FileError> {
