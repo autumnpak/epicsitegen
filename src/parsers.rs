@@ -116,8 +116,15 @@ fn parse_for_element(pairs: &mut Pairs<Rule>) -> TemplateElement {
   let name = pairs.next().unwrap().as_str().to_string();
   let grouping = parse_for_groups(&mut pairs.next().unwrap().into_inner());
   let mut possibly_group = pairs.next().unwrap();
+  let mut sort_and_filter = ForSortAndFilter {
+    sort_key: None,
+    filter_includes: None,
+    filter_excludes: None,
+    is_sort_ascending: false,
+  };
   possibly_group = match possibly_group.as_rule() {
-    Rule::for_grouping => {
+    Rule::for_sort_and_filter => {
+      sort_and_filter = parse_for_sort_filter(&mut possibly_group.into_inner());
       pairs.next().unwrap()
     },
     Rule::ast => {
@@ -130,13 +137,50 @@ fn parse_for_element(pairs: &mut Pairs<Rule>) -> TemplateElement {
     None => vec![],
     Some(ss) => ss.into_inner().map(parse_ast_node).collect(),
   };
-  let sort_and_filter = ForSortAndFilter {
-    sort_key: None,
-    filter_includes: None,
-    filter_excludes: None,
-    is_sort_ascending: false,
-  };
   TemplateElement::For{name, groupings: vec![grouping], main: main, separator, sort_and_filter}
+}
+
+fn parse_for_sort_filter(pairs: &mut Pairs<Rule>) -> ForSortAndFilter {
+  let mut sort_key = None;
+  let mut filter_includes = None;
+  let mut filter_excludes = None;
+  let mut is_sort_ascending = false;
+  let mut running = true;
+  while running {
+    match pairs.next() {
+      Some(pp) => match pp.as_rule() {
+        Rule::for_sort => {
+          let mut pairs2 = pp.into_inner();
+          is_sort_ascending = if pairs2.next().unwrap().as_str() == "sort-desc" {false} else {true};
+          sort_key = Some(parse_value(pairs2.next().unwrap()));
+          /*is_sort_ascending = match pairs2.next() {
+            Some(ss) => {
+              println!("{}", ss.as_str());
+              if ss.as_str() == "asc" { true } else { false }
+            }
+            None => true
+          };*/
+        },
+        Rule::for_filters => {
+          let mut pairs2 = pp.into_inner();
+          let mut running2 = true;
+          while running2 {
+            match pairs2.next() {
+              Some(pp) => match pp.as_rule() {
+                Rule::for_include => filter_includes = Some(parse_value(pp)),
+                Rule::for_exclude => filter_excludes = Some(parse_value(pp)),
+                _ => unreachable!("for sort and filter options"),
+              },
+              None => running2 = false
+            }
+          }
+        },
+        _ => unreachable!("for sort and filter options"),
+      },
+      None => { running = false; }
+    };
+  };
+  ForSortAndFilter{ sort_key, filter_includes, filter_excludes, is_sort_ascending }
 }
 
 fn parse_for_groups(pairs: &mut Pairs<Rule>) -> ForGrouping {

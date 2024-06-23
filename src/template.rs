@@ -80,6 +80,9 @@ pub enum TemplateError {
     FileErrorDerivedFrom(FileError, TemplateValue),
     YamlFileError(YamlFileError),
     OnForLoopIteration(Box<TemplateError>, String),
+    OnForLoopIterationSortKey(Box<TemplateError>, String),
+    OnForLoopIterationIncludeKey(Box<TemplateError>, String),
+    OnForLoopIterationExcludeKey(Box<TemplateError>, String),
     InIfExistsLoop(Box<TemplateError>, TemplateValue, bool),
     KeyNotPresent(String),
     KeyNotString(String),
@@ -120,6 +123,9 @@ impl std::fmt::Display for TemplateError {
             TemplateError::FileErrorDerivedFrom(err, value) => write!(ff, "{} (derived from {})", err, value),
             TemplateError::YamlFileError(err) => err.fmt(ff),
             TemplateError::OnForLoopIteration(err, value) => write!(ff, "{}\nwithin for loop entry {}", err, value),
+            TemplateError::OnForLoopIterationSortKey(err, value) => write!(ff, "{}\nwhen getting the sorting key for loop entry {}", err, value),
+            TemplateError::OnForLoopIterationIncludeKey(err, value) => write!(ff, "{}\nwhen getting the include key for loop entry {}", err, value),
+            TemplateError::OnForLoopIterationExcludeKey(err, value) => write!(ff, "{}\nwhen getting the exclude key for loop entry {}", err, value),
             TemplateError::InIfExistsLoop(err, value, truthiness) => write!(ff, "{}\nwithin the {} branch of checking if {} exists", err, truthiness, value),
             TemplateError::KeyNotPresent(strr) => write!(ff, "The key {} was not present in the parameters.", strr),
             TemplateError::KeyNotString(strr) => write!(ff, "The key {} in the parameters was not a string.", strr),
@@ -219,16 +225,33 @@ impl TemplateElement {
                 }
                 rendered
             }
-            TemplateElement::For{name, groupings, main, separator, ..} => {
+            TemplateElement::For{name, groupings, main, separator, sort_and_filter} => {
                 let over = for_make_iterable(params, groupings, io)?;
-                let mapped: Vec<String> = map_m(over, |ii| {
+                let mut mapped: Vec<(String, String)> = map_m(over, |ii| {
                     let mut new_params = params.clone();
                     insert_value(&mut new_params, &name, ii.0.clone());
-                    render_elements(main, &new_params, pipes, io, context)
-                        .map_err(|ee| TemplateError::OnForLoopIteration(Box::new(ee), ii.1.to_string()))
+                    let key = match &sort_and_filter.sort_key {
+                        None => String::new(),
+                        Some(ss) => {
+                            let keylookup = lookup_value(&ss, &new_params)
+                                .map_err(|ee| TemplateError::OnForLoopIterationSortKey(Box::new(ee), ii.1.to_string()))?;
+                            tostr(keylookup)
+                                .map_err(|ee| TemplateError::OnForLoopIterationSortKey(Box::new(ee), ii.1.to_string()))?
+                        }
+                    };
+                    let value = render_elements(main, &new_params, pipes, io, context)
+                        .map_err(|ee| TemplateError::OnForLoopIteration(Box::new(ee), ii.1.to_string()))?;
+                    Ok((key, value))
                 })?;
                 let sep = render_elements(separator, params, pipes, io, context)?;
-                Ok(mapped.join(&sep))
+                if sort_and_filter.sort_key.is_some() {
+                    mapped.sort_by(|aa, bb| {
+                        let oo = (&aa.1).cmp(&bb.1);
+                        if sort_and_filter.is_sort_ascending { oo } else { oo.reverse() }
+                    });
+                }
+                let finalelems: Vec<String> = mapped.iter_mut().map(|ii| ii.1.clone()).collect();
+                Ok(finalelems.join(&sep))
             }
         }
     }

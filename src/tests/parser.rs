@@ -215,8 +215,28 @@ fn for_loop_over_everything() {
 }
 
 #[test]
+fn for_loop_over_everything_sorted() {
+    accept("foo {% for it in numbers, morenumbers in-file entry1.yaml in-file-at loc sort it %}{{it}} {% endfor %}yay", "loc: entry2.yaml\nnumbers: [2, 4, 6]\nmorenumbers: [1, 3]", "foo 1 2 3 4 6 8 9 asd fgh yay");
+}
+
+#[test]
 fn for_loop_over_everything_with_new_lines() {
     accept("foo {% for it\n  in numbers, morenumbers\n  in-file entry1.yaml\n  in-file-at loc %}{{it}} {% endfor %}yay", "loc: entry2.yaml\nnumbers: [2, 4, 6]\nmorenumbers: [1, 3]", "foo 2 4 6 1 3 9 8 asd fgh yay");
+}
+
+#[test]
+fn for_loop_numbers_sort() {
+    accept("foo {% for it in numbers sort it %}{{it}} {% endfor %}yay", "numbers: [4, 2, 6]", "foo 2 4 6 yay");
+}
+
+#[test]
+fn for_loop_numbers_sort_asc() {
+    accept("foo {% for it in numbers sort-asc it %}{{it}} {% endfor %}yay", "numbers: [4, 2, 6]", "foo 2 4 6 yay");
+}
+
+#[test]
+fn for_loop_numbers_sort_desc() {
+    accept("foo {% for it in numbers sort-desc it %}{{it}} {% endfor %}yay", "numbers: [4, 2, 6]", "foo 6 4 2 yay");
 }
 
 #[test]
