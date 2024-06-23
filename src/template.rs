@@ -39,13 +39,27 @@ pub enum TemplateElement {
     },
     For {
         name: String,
-        values: Vec<TemplateValue>,
-        filenames: Vec<String>,
-        files_at: Vec<TemplateValue>,
         main: Vec<TemplateElement>,
-        separator: Vec<TemplateElement>
+        groupings: Vec<ForGrouping>,
+        separator: Vec<TemplateElement>,
+        sort_and_filter: ForSortAndFilter,
     },
     LookupCatcher(Vec<Vec<TemplateElement>>),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ForGrouping {
+    pub values: Vec<TemplateValue>,
+    pub filenames: Vec<String>,
+    pub files_at: Vec<TemplateValue>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ForSortAndFilter {
+    pub sort_key: Option<TemplateValue>,
+    pub is_sort_ascending: bool,
+    pub filter_includes: Option<TemplateValue>,
+    pub filter_excludes: Option<TemplateValue>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -205,8 +219,8 @@ impl TemplateElement {
                 }
                 rendered
             }
-            TemplateElement::For{name, values, filenames, files_at, main, separator, ..} => {
-                let over = for_make_iterable(params, values, filenames, files_at, io)?;
+            TemplateElement::For{name, groupings, main, separator, ..} => {
+                let over = for_make_iterable(params, groupings, io)?;
                 let mapped: Vec<String> = map_m(over, |ii| {
                     let mut new_params = params.clone();
                     insert_value(&mut new_params, &name, ii.0.clone());
@@ -242,35 +256,35 @@ struct ForIteration<'a>(YamlValue, ForIterationType<'a>);
 
 fn for_make_iterable<'a>(
     params: & YamlMap,
-    values: &'a Vec<TemplateValue>,
-    filenames: &'a Vec<String>,
-    files_at: &'a Vec<TemplateValue>,
+    groupings: &'a Vec<ForGrouping>,
     io: &mut impl ReadsFiles
 ) -> Result<Vec<ForIteration<'a>>, TemplateError> {
     let mut entries: Vec<ForIteration> = Vec::new();
-    for value in values {
-        let lookup = lookup_value(&value, params)?;
-        let as_vec = to_iterable(lookup)?;
-        for (ind, finalval) in as_vec.into_iter().enumerate() {
-            entries.push(ForIteration(finalval, ForIterationType::Values(&value, ind)));
+    for gg in groupings {
+        for value in gg.values.iter() {
+            let lookup = lookup_value(&value, params)?;
+            let as_vec = to_iterable(lookup)?;
+            for (ind, finalval) in as_vec.into_iter().enumerate() {
+                entries.push(ForIteration(finalval, ForIterationType::Values(&value, ind)));
+            }
         }
-    }
-    for filename in filenames {
-        let lookup = io.read_yaml(filename)
-            .map_err(|xx| TemplateError::YamlFileError(xx))?;
-        let as_vec = to_iterable(lookup)?;
-        for (ind, finalval) in as_vec.into_iter().enumerate() {
-            entries.push(ForIteration(finalval, ForIterationType::Filenames(&filename, ind)));
+        for filename in gg.filenames.iter() {
+            let lookup = io.read_yaml(&filename)
+                .map_err(|xx| TemplateError::YamlFileError(xx))?;
+            let as_vec = to_iterable(lookup)?;
+            for (ind, finalval) in as_vec.into_iter().enumerate() {
+                entries.push(ForIteration(finalval, ForIterationType::Filenames(&filename, ind)));
+            }
         }
-    }
-    for fileat in files_at {
-        let lookup = lookup_value(&fileat, params)?;
-        let filename = tostr(lookup)?;
-        let file = io.read_yaml(&filename)
-            .map_err(|xx| TemplateError::YamlFileError(xx))?;
-        let as_vec = to_iterable(file)?;
-        for (ind, finalval) in as_vec.into_iter().enumerate() {
-            entries.push(ForIteration(finalval, ForIterationType::FileAt(&fileat, filename.to_owned(), ind)));
+        for fileat in gg.files_at.iter() {
+            let lookup = lookup_value(&fileat, params)?;
+            let filename = tostr(lookup)?;
+            let file = io.read_yaml(&filename)
+                .map_err(|xx| TemplateError::YamlFileError(xx))?;
+            let as_vec = to_iterable(file)?;
+            for (ind, finalval) in as_vec.into_iter().enumerate() {
+                entries.push(ForIteration(finalval, ForIterationType::FileAt(&fileat, filename.to_owned(), ind)));
+            }
         }
     }
     Ok(entries)

@@ -1,5 +1,5 @@
 use crate::template::{
-  TemplateElement, TemplateValue, TemplateValueAccess
+  TemplateElement, TemplateValue, TemplateValueAccess, ForGrouping, ForSortAndFilter
 };
 use crate::pipes::{
   Pipe
@@ -114,25 +114,48 @@ fn parse_values(pairs: &mut Pairs<Rule>) -> Vec<TemplateValue> {
 
 fn parse_for_element(pairs: &mut Pairs<Rule>) -> TemplateElement {
   let name = pairs.next().unwrap().as_str().to_string();
-  let mut values: Vec<TemplateValue> = Vec::new();
-  let mut filenames: Vec<String> = Vec::new();
-  let mut files_at: Vec<TemplateValue> = Vec::new();
-  let mut main: Option<Vec<TemplateElement>> = Option::None;
-  while main.is_none() {
-    let next = pairs.next().unwrap();
-    match next.as_rule() {
-      Rule::for_in => values = parse_values(&mut next.into_inner().next().unwrap().into_inner()),
-      Rule::for_in_file => filenames = parse_filenames(&mut next.into_inner().next().unwrap().into_inner()),
-      Rule::for_in_file_at => files_at = parse_values(&mut next.into_inner().next().unwrap().into_inner()),
-      Rule::ast => main = Some(next.into_inner().map(parse_ast_node).collect()),
-      _ => unreachable!("for loop options"),
-    };
+  let grouping = parse_for_groups(&mut pairs.next().unwrap().into_inner());
+  let mut possibly_group = pairs.next().unwrap();
+  possibly_group = match possibly_group.as_rule() {
+    Rule::for_grouping => {
+      pairs.next().unwrap()
+    },
+    Rule::ast => {
+      possibly_group
+    },
+    _ => unreachable!("for loop thing"),
   };
+  let main = possibly_group.into_inner().map(parse_ast_node).collect();
   let separator = match pairs.next().expect("e false").into_inner().next() {
     None => vec![],
     Some(ss) => ss.into_inner().map(parse_ast_node).collect(),
   };
-  TemplateElement::For{name, values, filenames, files_at, main: main.unwrap(), separator}
+  let sort_and_filter = ForSortAndFilter {
+    sort_key: None,
+    filter_includes: None,
+    filter_excludes: None,
+    is_sort_ascending: false,
+  };
+  TemplateElement::For{name, groupings: vec![grouping], main: main, separator, sort_and_filter}
+}
+
+fn parse_for_groups(pairs: &mut Pairs<Rule>) -> ForGrouping {
+  let mut values: Vec<TemplateValue> = Vec::new();
+  let mut filenames: Vec<String> = Vec::new();
+  let mut files_at: Vec<TemplateValue> = Vec::new();
+  let mut running = true;
+  while running {
+    match pairs.next() {
+      Some(pp) => match pp.as_rule() {
+        Rule::for_in => values = parse_values(&mut pp.into_inner().next().unwrap().into_inner()),
+        Rule::for_in_file => filenames = parse_filenames(&mut pp.into_inner().next().unwrap().into_inner()),
+        Rule::for_in_file_at => files_at = parse_values(&mut pp.into_inner().next().unwrap().into_inner()),
+        _ => unreachable!("for loop grouping options"),
+      },
+      None => { running = false; }
+    };
+  };
+  ForGrouping { values, filenames, files_at }
 }
 
 fn parse_catcher(pairs: &mut Pairs<Rule>) -> TemplateElement {
