@@ -240,6 +240,31 @@ fn for_loop_numbers_sort_desc() {
 }
 
 #[test]
+fn for_loop_numbers_filter_include() {
+    accept("foo {% for it in numbers includes it.uh %}{{it.uh}} {% endfor %}yay", "numbers: [{uh: 1}, {uhh: 2}, {uh: 3}]", "foo 1 3 yay");
+}
+
+#[test]
+fn for_loop_numbers_filter_exclude() {
+    accept("foo {% for it in numbers excludes it.uh %}{{it.uhh}} {% endfor %}yay", "numbers: [{uh: 1}, {uhh: 2}, {uh: 3}]", "foo 2 yay");
+}
+
+#[test]
+fn for_loop_numbers_filter_include_and_exclude() {
+    accept("foo {% for it in numbers includes it.uh excludes it.uhh %}{{it.uh}} {% endfor %}yay", "numbers: [{uh: 1}, {it: 1, uhh: 2}, {uhh: 3}, {uh: 4}, {uhh: 5}]", "foo 1 4 yay");
+}
+
+#[test]
+fn for_loop_numbers_filter_exclude_nonexistent() {
+    accept("foo {% for it in numbers excludes whuh %}{{it.uh}} {% endfor %}yay", "numbers: [{uh: 1}, {uh: 2}, {uh: 3}]", "foo 1 2 3 yay");
+}
+
+#[test]
+fn for_loop_numbers_filter_include_nonexistent() {
+    accept("foo {% for it in numbers includes whuh %}{{it.uh}} {% endfor %}yay", "numbers: [{uh: 1}, {uh: 2}, {uh: 3}]", "foo yay");
+}
+
+#[test]
 fn replacement_with_template_pipe_1() {
     accept("foo {{bar | test0}} yay", "bar: test", "foo um1 yay");
 }

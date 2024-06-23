@@ -230,18 +230,44 @@ impl TemplateElement {
                 let mut mapped: Vec<(String, String)> = map_m(over, |ii| {
                     let mut new_params = params.clone();
                     insert_value(&mut new_params, &name, ii.0.clone());
-                    let key = match &sort_and_filter.sort_key {
-                        None => String::new(),
-                        Some(ss) => {
-                            let keylookup = lookup_value(&ss, &new_params)
-                                .map_err(|ee| TemplateError::OnForLoopIterationSortKey(Box::new(ee), ii.1.to_string()))?;
-                            tostr(keylookup)
-                                .map_err(|ee| TemplateError::OnForLoopIterationSortKey(Box::new(ee), ii.1.to_string()))?
+                    let included = if let Some(ss) = &sort_and_filter.filter_includes {
+                        let keylookup = lookup_value(&ss, &new_params);
+                        match keylookup {
+                            Ok(..) => true,
+                            Err(TemplateError::KeyNotPresent(..)) |
+                            Err(TemplateError::FieldNotPresent(..)) |
+                            Err(TemplateError::IndexOOB(..)) => { false },
+                            Err(ee) => Err(TemplateError::OnForLoopIterationIncludeKey(Box::new(ee), ii.1.to_string()))?,
                         }
+                    } else {
+                        true
                     };
-                    let value = render_elements(main, &new_params, pipes, io, context)
-                        .map_err(|ee| TemplateError::OnForLoopIteration(Box::new(ee), ii.1.to_string()))?;
-                    Ok((key, value))
+                    let excluded = if let Some(ss) = &sort_and_filter.filter_excludes {
+                        let keylookup = lookup_value(&ss, &new_params);
+                        match keylookup {
+                            Ok(..) => false,
+                            Err(TemplateError::KeyNotPresent(..)) |
+                            Err(TemplateError::FieldNotPresent(..)) |
+                            Err(TemplateError::IndexOOB(..)) => { true },
+                            Err(ee) => Err(TemplateError::OnForLoopIterationExcludeKey(Box::new(ee), ii.1.to_string()))?,
+                        }
+                    } else {
+                        true
+                    };
+                    if included && excluded {
+                        let key = match &sort_and_filter.sort_key {
+                            None => String::new(),
+                            Some(ss) => {
+                                let keylookup = lookup_value(&ss, &new_params)
+                                    .map_err(|ee| TemplateError::OnForLoopIterationSortKey(Box::new(ee), ii.1.to_string()))?;
+                                tostr(keylookup)
+                                    .map_err(|ee| TemplateError::OnForLoopIterationSortKey(Box::new(ee), ii.1.to_string()))?
+                            }
+                        };
+                        let value = render_elements(main, &new_params, pipes, io, context)
+                            .map_err(|ee| TemplateError::OnForLoopIteration(Box::new(ee), ii.1.to_string()))?;
+                        Ok((key, value))
+                    } else { Ok((String::new(), String::new())) }
                 })?;
                 let sep = render_elements(separator, params, pipes, io, context)?;
                 if sort_and_filter.sort_key.is_some() {

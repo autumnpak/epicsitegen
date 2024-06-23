@@ -153,13 +153,6 @@ fn parse_for_sort_filter(pairs: &mut Pairs<Rule>) -> ForSortAndFilter {
           let mut pairs2 = pp.into_inner();
           is_sort_ascending = if pairs2.next().unwrap().as_str() == "sort-desc" {false} else {true};
           sort_key = Some(parse_value(pairs2.next().unwrap()));
-          /*is_sort_ascending = match pairs2.next() {
-            Some(ss) => {
-              println!("{}", ss.as_str());
-              if ss.as_str() == "asc" { true } else { false }
-            }
-            None => true
-          };*/
         },
         Rule::for_filters => {
           let mut pairs2 = pp.into_inner();
@@ -167,8 +160,8 @@ fn parse_for_sort_filter(pairs: &mut Pairs<Rule>) -> ForSortAndFilter {
           while running2 {
             match pairs2.next() {
               Some(pp) => match pp.as_rule() {
-                Rule::for_include => filter_includes = Some(parse_value(pp)),
-                Rule::for_exclude => filter_excludes = Some(parse_value(pp)),
+                Rule::for_include => filter_includes = Some(parse_value(pp.into_inner().next().unwrap())),
+                Rule::for_exclude => filter_excludes = Some(parse_value(pp.into_inner().next().unwrap())),
                 _ => unreachable!("for sort and filter options"),
               },
               None => running2 = false

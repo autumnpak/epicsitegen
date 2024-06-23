@@ -101,7 +101,6 @@ pub fn tostr(value: &Yaml) -> Result<String, TemplateError> {
         Yaml::Integer(ii) => Ok(format!("{}", ii)),
         _ => match YamlEmitter::new(&mut outstr).dump(value) {
             Ok(_) => {
-                println!("um {}", outstr);
                 Ok(outstr)
             } ,
             Err(ee) => Err(TemplateError::SerialisationError(ee.to_string()))
