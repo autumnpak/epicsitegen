@@ -36,9 +36,9 @@ pub enum PipeInputSource<'a> {
 impl<'a> std::fmt::Display for PipeInputSource<'a> {
     fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PipeInputSource::Value(strr) => write!(ff, "{}", strr),
-            PipeInputSource::File(strr) => write!(ff, "the file {}", strr),
-            PipeInputSource::FileFrom(strr, val) => write!(ff, "the file {} from {}", strr, val),
+            PipeInputSource::Value(strr) => write!(ff, "\"{}\"", strr),
+            PipeInputSource::File(strr) => write!(ff, "the file \"{}\"", strr),
+            PipeInputSource::FileFrom(strr, val) => write!(ff, "the file \"{}\" from \"{}\"", strr, val),
         }
     }
 }
@@ -84,17 +84,16 @@ pub fn execute_named_pipe<'a>(
     io: &mut impl ReadsFiles,
     context: &TemplateContext,
 ) -> Result<YamlValue, TemplateError> {
-    let mut map = new_yaml_map();
-    let params_map = match value {
-        YamlValue::Hash(map) => map,
-         _ => {
-            map.insert(YamlValue::String("it".to_owned()), value.clone());
-            &map
-        }
-    };
-    let input = YamlValue::Hash(params_map.clone());
     match pipemap.get(pipe) {
         Some(PipeDefinition::Template(elements)) => {
+            let mut map = new_yaml_map();
+            let params_map = match value {
+                YamlValue::Hash(map) => map,
+                 _ => {
+                    map.insert(YamlValue::String("it".to_owned()), value.clone());
+                    &map
+                }
+            };
             let rendered = render_elements(elements, params_map, pipemap, io, context,)
                 .map_err(|ee| TemplateError::WithinTemplateNamedPipe(Box::new(ee), pipe.to_owned(), index, valuepath.to_string()))?;
             Ok(YamlValue::String(rendered))
@@ -103,7 +102,7 @@ pub fn execute_named_pipe<'a>(
             let ioimpl: ReadsFilesImpl = ReadsFilesImpl {
                 read: &|filename| io.read(filename).map(|ii| ii.to_owned())
             };
-            match func(&input, pipemap, &ioimpl) {
+            match func(value, pipemap, &ioimpl) {
                 Ok(strr) => Ok(strr),
                 Err(ee) => Err(TemplateError::PipeExecutionError(ee, pipe.to_owned(), index, valuepath.to_string()))
             }
@@ -111,21 +110,3 @@ pub fn execute_named_pipe<'a>(
         None => Err(TemplateError::PipeMissing(pipe.to_owned()))
     }
 }
-/*
-pub fn pipe_success(
-    func: fn(&YamlValue, &PipeMap, &ReadsFilesImpl) -> String,
-) -> PipeDefinition {
-    let xx = |input, pipes, io| Ok(YamlValue::String(func(input, pipes, io)));
-    PipeDefinition::Fn(xx)
-}
-
-pub fn pipe_str_to_str(
-    func: fn(&str, &PipeMap, &ReadsFilesImpl) -> String,
-) -> PipeDefinition {
-    PipeDefinition::Fn(|input, pipes, io|
-        match input {
-            YamlValue::String(strr) => Ok(YamlValue::String(func(strr, pipes, io))),
-            _ => Err("Pipe expects a string but it got something else".to_owned())
-        }
-    )
-}*/

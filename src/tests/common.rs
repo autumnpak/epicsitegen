@@ -57,6 +57,7 @@ pub fn setup_io() -> TestFileCache {
     files.insert("entry2.yaml".to_string(), "[\"asd\", \"fgh\"]".to_string());
     files.insert("base01.txt".to_string(), "foo {{bar}} yay".to_string());
     files.insert("base02.txt".to_string(), "{{_input}} {{_output}} {{_outputfolder}} {{_outputfull}} {{_dots}}".to_string());
+    files.insert("base03.txt".to_string(), "foo {{mapped}} yay".to_string());
     TestFileCache{files, yamls: HashMap::new(), written: HashMap::new()}
 }
 

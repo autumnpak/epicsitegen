@@ -1,10 +1,9 @@
-use std::time::{SystemTime, UNIX_EPOCH};
 use crate::yaml::{YamlMap, YamlValue, YamlFileError, lookup_str_from_yaml_map};
 use crate::template::{TemplateError, render, render_elements, TemplateContext};
 use crate::pipes::{PipeMap};
 use crate::io::{ReadsFiles, FileError};
 use crate::parsers::{parse_template_string};
-use crate::utils::{map_m_mut, map_m_ref, fold_m_mut, map_m_index, map_m_ref_index};
+use crate::utils::{map_m_mut, map_m_ref, map_m_index, map_m_ref_index};
 use std::path::PathBuf;
 use pathdiff::diff_paths;
 
@@ -20,6 +19,7 @@ pub enum BuildError {
     BMOutputNotSpecified(ParamsSource),
     BMMappingParseError(String, String, ParamsSource),
     BMMappingTemplateError(TemplateError, String, ParamsSource),
+    BMMappingIsntString(String, ParamsSource),
 }
 
 impl std::fmt::Display for BuildError {
@@ -28,13 +28,14 @@ impl std::fmt::Display for BuildError {
             BuildError::FileError(ee) => ee.fmt(ff),
             BuildError::YamlFileError(ee) => ee.fmt(ff),
             BuildError::TemplateError(ee) => ee.fmt(ff),
-            BuildError::BMFIsntArray(filename) => write!(ff, "Can't build multiple files using {} as params as it doesn't contain a yaml array", filename),
-            BuildError::BMFContainsNonMap(filename, idx) => write!(ff, "Can't build multiple files using {} as params because entry {} isn't a map", filename, idx),
+            BuildError::BMFIsntArray(filename) => write!(ff, "Can't build multiple files using \"{}\" as params as it doesn't contain a yaml array", filename),
+            BuildError::BMFContainsNonMap(filename, idx) => write!(ff, "Can't build multiple files using \"{}\" as params because entry {} isn't a map", filename, idx),
             BuildError::BMOutputNotSpecified(source) => write!(ff, "Can't build the file at {} because it has no output specified", source),
-            BuildError::BMInputNotSpecified(filename, source) => write!(ff, "Can't build {} (at {}) because it has no base input specified", filename, source),
-            BuildError::BMMappingParseError(err, key, source) => write!(ff, "Can't parse mapping {} (at {}): {}", key, source, err),
-            BuildError::BMMappingTemplateError(err, key, source) => write!(ff, "Can't parse mapping {} (at {}): {}", key, source, err),
-            BuildError::BMSourced(source, err) => write!(ff, "At {}: {}", source, err),
+            BuildError::BMInputNotSpecified(filename, source) => write!(ff, "Can't build \"{}\" (at {}) because it has no base input specified", filename, source),
+            BuildError::BMMappingParseError(err, key, source) => write!(ff, "Can't parse mapping \"{}\" (at {}): {}", key, source, err),
+            BuildError::BMMappingTemplateError(err, key, source) => write!(ff, "Can't parse mapping \"{}\" (at {}): {}", key, source, err),
+            BuildError::BMMappingIsntString(key, source) => write!(ff, "Mapping \"{}\" (at {}) isn't a string", key, source),
+            BuildError::BMSourced(source, err) => write!(ff, "{}\nat {}", err, source),
         }
     }
 }
@@ -53,7 +54,11 @@ impl std::fmt::Display for ParamsSource {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct SourcedParams(YamlMap, ParamsSource, YamlMap); //params, source, mapping
+pub struct SourcedParams {
+    pub params: YamlMap,
+    pub source: ParamsSource,
+    pub mapping: YamlMap
+} //params, source, mapping
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuildAction {
@@ -169,13 +174,21 @@ fn build_multiple_pages_files(
         }?;
         map_m_index(arr, |idx, aa| match aa {
             YamlValue::Hash(hh) => Ok(entries.push(
-                    SourcedParams(hh.to_owned(), ParamsSource(group_index, idx, Some(file.to_owned())), on.mapping.to_owned())
+                    SourcedParams{
+                        params: hh.to_owned(),
+                        source: ParamsSource(group_index, idx, Some(file.to_owned())),
+                        mapping: on.mapping.to_owned()
+                    }
             )),
             _ => Err(BuildError::BMFContainsNonMap(file.to_owned(), idx))
         })
     })?;
     for (idx, param) in on.params.iter().enumerate() {
-        entries.push(SourcedParams(param.to_owned(), ParamsSource(group_index, idx, None), on.mapping.to_owned()))
+        entries.push(SourcedParams{
+            params: param.to_owned(),
+            source: ParamsSource(group_index, idx, None),
+            mapping: on.mapping.to_owned()
+        })
     }
     Ok(entries)
 }
@@ -189,11 +202,11 @@ fn build_multiple_pages_map_params(
 ) -> Result<Vec<BuildActionExpanded>, BuildError> {
     map_m_mut(values, |ii: SourcedParams| {
         let mut params: YamlMap = default_params.to_owned();
-        params.extend(ii.0);
-        let mapped = apply_mapping(&params, &ii.2, &ii.1, pipes, io, context)?;
-        let output = lookup_str_from_yaml_map("output", &mapped).map_err(|_| BuildError::BMOutputNotSpecified(ii.1.clone()))?;
-        let input = lookup_str_from_yaml_map("input", &mapped).map_err(|_| BuildError::BMInputNotSpecified(output.to_owned(), ii.1.clone()))?;
-        Ok(BuildActionExpanded::BuildPage{input: input.to_owned(), output: output.to_owned(), params: mapped.to_owned(), source: Some(ii.1)})
+        params.extend(ii.params);
+        let mapped = apply_mapping(&params, &ii.mapping, &ii.source, pipes, io, context)?;
+        let output = lookup_str_from_yaml_map("output", &mapped).map_err(|_| BuildError::BMOutputNotSpecified(ii.source.clone()))?;
+        let input = lookup_str_from_yaml_map("input", &mapped).map_err(|_| BuildError::BMInputNotSpecified(output.to_owned(), ii.source.clone()))?;
+        Ok(BuildActionExpanded::BuildPage{input: input.to_owned(), output: output.to_owned(), params: mapped.to_owned(), source: Some(ii.source)})
     })
 }
 
@@ -226,7 +239,10 @@ pub fn apply_mapping<'a>(
                     }
                 }
             },
-            _ => ()
+            _ => return Err(BuildError::BMMappingIsntString(
+                key.to_owned().as_str().unwrap().to_owned(),
+                source.clone()
+            ))
         }
     }
     Ok(mapp)

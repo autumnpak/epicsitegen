@@ -79,3 +79,21 @@ fn Build_multiple_pages_not_from_files() {
     io.assert_written("build/out1.txt", "foo test yay");
     io.assert_written("build/out2.txt", "foo testing yay");
 }
+
+#[test]
+fn Build_multiple_pages_mapping() {
+    let mut io = setup_io();
+    runs(BuildAction::BuildMultiplePages{default_params: params("{}"), on: vec![
+        BuildMultiplePages{
+            mapping: params("mapped: \"{{bar}}{{yay}}\""),
+            files: vec![],
+            params: vec![
+                params("input: base03.txt\noutput: out1.txt\nbar: test\nyay: nah"),
+                params("input: base03.txt\noutput: out2.txt\nbar: testing\nyay: nah2"),
+            ],
+        },
+    ], descriptor: "uh".to_owned()}, &mut io);
+    assert_eq!(2, io.written.len());
+    io.assert_written("build/out1.txt", "foo testnah yay");
+    io.assert_written("build/out2.txt", "foo testingnah2 yay");
+}

@@ -120,15 +120,15 @@ impl std::fmt::Display for TemplateError {
         match self {
             TemplateError::UnknownError => write!(ff, "An unknown error occured."),
             TemplateError::FileError(err) => err.fmt(ff),
-            TemplateError::FileErrorDerivedFrom(err, value) => write!(ff, "{} (derived from {})", err, value),
+            TemplateError::FileErrorDerivedFrom(err, value) => write!(ff, "{} (derived from \"{}\")", err, value),
             TemplateError::YamlFileError(err) => err.fmt(ff),
             TemplateError::OnForLoopIteration(err, value) => write!(ff, "{}\nwithin for loop entry {}", err, value),
             TemplateError::OnForLoopIterationSortKey(err, value) => write!(ff, "{}\nwhen getting the sorting key for loop entry {}", err, value),
             TemplateError::OnForLoopIterationIncludeKey(err, value) => write!(ff, "{}\nwhen getting the include key for loop entry {}", err, value),
             TemplateError::OnForLoopIterationExcludeKey(err, value) => write!(ff, "{}\nwhen getting the exclude key for loop entry {}", err, value),
             TemplateError::InIfExistsLoop(err, value, truthiness) => write!(ff, "{}\nwithin the {} branch of checking if {} exists", err, truthiness, value),
-            TemplateError::KeyNotPresent(strr) => write!(ff, "The key {} was not present in the parameters.", strr),
-            TemplateError::KeyNotString(strr) => write!(ff, "The key {} in the parameters was not a string.", strr),
+            TemplateError::KeyNotPresent(strr) => write!(ff, "The key \"{}\" was not present in the parameters.", strr),
+            TemplateError::KeyNotString(strr) => write!(ff, "The key \"{}\" in the parameters was not a string.", strr),
             TemplateError::ParseError(strr) => write!(ff, "Parsing the templating text failed: {}", strr),
             TemplateError::SerialisationError(strr) => write!(ff, "Failed to serialise a value: {}", strr),
             TemplateError::IndexOOB(strr, idx) => write!(ff, "Index {} of {} is out of bounds", idx, strr),
@@ -138,11 +138,11 @@ impl std::fmt::Display for TemplateError {
             TemplateError::ForOnUnindexable(strr) => write!(ff, "Can't do a for loop on {} as it's not indexable", strr),
             TemplateError::PipeMissing(strr) => write!(ff, "Can't use pipe {} as it doesn't exist", strr),
             TemplateError::PipeExecutionError(error, pipename, pipeindex, path) => 
-                write!(ff, "Error running pipe {} as pipe {} on {}: {}", pipename, pipeindex, path, error),
+                write!(ff, "Error running pipe \"{}\" as pipe {} on {}: {}", pipename, pipeindex, path, error),
             TemplateError::WithinTemplatePipe(error, pipeindex, path) => 
                 write!(ff, "{}\nwhen running the default templating pipe as pipe {} on {}", error, pipeindex, path),
             TemplateError::WithinTemplateNamedPipe(error, pipename, pipeindex, path) => 
-                write!(ff, "{}\nwhen running templating pipe {} as pipe {} on {}", error, pipename, pipeindex, path),
+                write!(ff, "{}\nwhen running templating pipe \"{}\" as pipe {} on {}", error, pipename, pipeindex, path),
         }
     }
 }
@@ -293,9 +293,9 @@ enum ForIterationType<'a>{
 impl<'a> std::fmt::Display for ForIterationType<'a> {
     fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ForIterationType::FileAt(value, filename, size) => write!(ff, "{} of file {} derived from {}", size, filename, value),
-            ForIterationType::Filenames(filename, size) => write!(ff, "{} of file {}", size, filename),
-            ForIterationType::Values(value, size) => write!(ff, "{} of {}", size, value),
+            ForIterationType::FileAt(value, filename, size) => write!(ff, "{} of file \"{}\" derived from \"{}\"", size, filename, value),
+            ForIterationType::Filenames(filename, size) => write!(ff, "{} of file \"{}\"", size, filename),
+            ForIterationType::Values(value, size) => write!(ff, "{} of \"{}\"", size, value),
         }
     }
 }
