@@ -227,7 +227,8 @@ impl TemplateElement {
             }
             TemplateElement::For{name, groupings, main, separator, sort_and_filter} => {
                 let over = for_make_iterable(params, groupings, io)?;
-                let mut mapped: Vec<(String, String)> = map_m(over, |ii| {
+                let mut mapped: Vec<(String, String)> = Vec::new();
+                for ii in over {
                     let mut new_params = params.clone();
                     insert_value(&mut new_params, &name, ii.0.clone());
                     let included = if let Some(ss) = &sort_and_filter.filter_includes {
@@ -266,16 +267,16 @@ impl TemplateElement {
                         };
                         let value = render_elements(main, &new_params, pipes, io, context)
                             .map_err(|ee| TemplateError::OnForLoopIteration(Box::new(ee), ii.1.to_string()))?;
-                        Ok((key, value))
-                    } else { Ok((String::new(), String::new())) }
-                })?;
-                let sep = render_elements(separator, params, pipes, io, context)?;
+                        mapped.push((key, value))
+                    }
+                };
                 if sort_and_filter.sort_key.is_some() {
                     mapped.sort_by(|aa, bb| {
-                        let oo = (&aa.1).cmp(&bb.1);
+                        let oo = (&aa.0).cmp(&bb.0);
                         if sort_and_filter.is_sort_ascending { oo } else { oo.reverse() }
                     });
                 }
+                let sep = render_elements(separator, params, pipes, io, context)?;
                 let finalelems: Vec<String> = mapped.iter_mut().map(|ii| ii.1.clone()).collect();
                 Ok(finalelems.join(&sep))
             }
