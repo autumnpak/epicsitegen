@@ -1,13 +1,12 @@
 use crate::yaml::{YamlValue, YamlFileError, load_yaml};
-use crate::utils::{map_m};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::fmt;
 use std::io;
+use std::sync::{Mutex, Arc};
 use std::time::{SystemTime, UNIX_EPOCH};
-use glob::{glob, Paths, GlobError};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum FileError {
@@ -47,10 +46,56 @@ impl<'a> fmt::Display for ReadsFilesImpl<'a> {
     }
 }
 
+pub struct ThreadsafeFileCache {
+    fc: FileCache,
+    mutex: Mutex<()>,
+}
+
+impl ReadsFiles for ThreadsafeFileCache {
+    /* There's a few assumptions I'm making here on the thread safety of this:
+     * - Files to be read will NOT be updated during the build process
+     * - Whenever a file is read, it's quickly transformed into some other form (YAML
+     *   representation, something piped, etc)
+     * - So if those files are updated anyway, there won't be a dangling reference to them because
+     *   the transformation happens so quickly
+     *
+     * I know this is pretty naive but at the very least it will (hopefully) only be inefficient instead
+     * of wrong
+     */
+    fn read(&mut self, filename: &str) -> Result<&str, FileError> {
+        let lock = self.mutex.lock().unwrap();
+        let res = self.fc.read(filename);
+        drop(lock);
+        res
+    }
+
+    fn write(&mut self, filename: &str, contents: &str) -> Result<(), FileError> {
+        let lock = self.mutex.lock().unwrap();
+        let res = self.fc.write(filename, contents);
+        drop(lock);
+        res
+    }
+
+    fn read_yaml(&mut self, filename: &str) -> Result<&YamlValue, YamlFileError> {
+        let lock = self.mutex.lock().unwrap();
+        let res = self.fc.read_yaml(filename);
+        drop(lock);
+        res
+    }
+
+    fn copy_files(&self, to: &str, from: &str) -> Result<(), FileError> {
+        let lock = self.mutex.lock().unwrap();
+        let res = self.fc.copy_files(to, from);
+        drop(lock);
+        res
+    }
+}
+
 pub struct FileCache {
     files: HashMap<String, (u128, String)>,
     yamls: HashMap<String, (u128, YamlValue)>,
 }
+
 impl FileCache {
     pub fn new() -> FileCache {
         FileCache {
@@ -120,16 +165,10 @@ impl ReadsFiles for FileCache {
             },
         };
         Ok(&got.1)
-        /*Ok(match self.yamls.entry(filename.to_owned()) {
-            Entry::Occupied(ee) => ee.into_mut(),
-            Entry::Vacant(ee) => {
-                ee.insert(l)
-            }
-        })*/
     }
 
     fn write(&mut self, filename: &str, contents: &str) -> Result<(), FileError> {
-        fs::write(filename, contents).map_err(|xx| FileError::FileCantBeWritten(filename.to_owned()))
+        fs::write(filename, contents).map_err(|_xx| FileError::FileCantBeWritten(filename.to_owned()))
     }
 
     fn copy_files(&self, from: &str, to: &str) -> Result<(), FileError> {
@@ -138,13 +177,13 @@ impl ReadsFiles for FileCache {
         if from_path.is_file() {
             match fs::copy(from, to) {
                 Ok(_) => Ok(()),
-                Err(ee) => Err(FileError::FilesCantBeCopied(from.to_owned())),
+                Err(_ee) => Err(FileError::FilesCantBeCopied(from.to_owned())),
             }
         } else {
             if to_path.is_file() {
                 Err(FileError::CantCopyDirIntoFile(from.to_owned(), to.to_owned()))
             } else {
-                copy_dir_all(from, to).map_err(|xx| FileError::FilesCantBeCopied(from.to_owned()))
+                copy_dir_all(from, to).map_err(|_xx| FileError::FilesCantBeCopied(from.to_owned()))
             }
         }
     }
