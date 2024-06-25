@@ -271,7 +271,7 @@ fn build_page(
     outpath.pop();
     let basepath: PathBuf = ".".into();
     let dots = diff_paths(basepath, outpath).unwrap();
-    let dotstring = dots.to_string_lossy();
+    let dotstring = dots.to_string_lossy().replace("\\", "/");
     full_params.insert(YamlValue::String("_dots".to_owned()), YamlValue::String(String::from(&dotstring[0..dotstring.len() - 1])));
     let rendered = render(&contents, &full_params, pipes, io, context)
         .map_err(|xx| BuildError::TemplateError(xx))?;
