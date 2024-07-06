@@ -58,7 +58,7 @@ fn Build_no_multiple_pages() {
             files: vec![],
             params: vec![],
         },
-    ], descriptor: "uh".to_owned()}, &mut io);
+    ], descriptor: "uh".to_owned(), include: None, exclude: None}, &mut io);
     assert_eq!(0, io.written.len());
 }
 
@@ -74,7 +74,7 @@ fn Build_multiple_pages_not_from_files() {
                 params("input: base01.txt\noutput: out2.txt\nbar: testing"),
             ],
         },
-    ], descriptor: "uh".to_owned()}, &mut io);
+    ], descriptor: "uh".to_owned(), include: None, exclude: None}, &mut io);
     assert_eq!(2, io.written.len());
     io.assert_written("build/out1.txt", "foo test yay");
     io.assert_written("build/out2.txt", "foo testing yay");
@@ -92,8 +92,67 @@ fn Build_multiple_pages_mapping() {
                 params("input: base03.txt\noutput: out2.txt\nbar: testing\nyay: nah2"),
             ],
         },
-    ], descriptor: "uh".to_owned()}, &mut io);
+    ], descriptor: "uh".to_owned(), include: None, exclude: None}, &mut io);
     assert_eq!(2, io.written.len());
     io.assert_written("build/out1.txt", "foo testnah yay");
     io.assert_written("build/out2.txt", "foo testingnah2 yay");
+}
+
+#[test]
+fn Build_multiple_pages_include() {
+    let mut io = setup_io();
+    runs(BuildAction::BuildMultiplePages{default_params: params("{}"), on: vec![
+        BuildMultiplePages{
+            mapping: params("{}"),
+            files: vec![],
+            params: vec![
+                params("input: base01.txt\noutput: out1.txt\nbar: test9\niii: whee\neee: whoo"),
+                params("input: base01.txt\noutput: out2.txt\nbar: test8\neee: whoo"),
+                params("input: base01.txt\noutput: out3.txt\nbar: test7\niii: whee"),
+                params("input: base01.txt\noutput: out4.txt\nbar: test6\n")
+            ],
+        },
+    ], descriptor: "uh".to_owned(), include: Some("iii".to_owned()), exclude: None}, &mut io);
+    assert_eq!(2, io.written.len());
+    io.assert_written("build/out1.txt", "foo test9 yay");
+    io.assert_written("build/out3.txt", "foo test7 yay");
+}
+
+#[test]
+fn Build_multiple_pages_exclude() {
+    let mut io = setup_io();
+    runs(BuildAction::BuildMultiplePages{default_params: params("{}"), on: vec![
+        BuildMultiplePages{
+            mapping: params("{}"),
+            files: vec![],
+            params: vec![
+                params("input: base01.txt\noutput: out1.txt\nbar: test9\niii: whee\neee: whoo"),
+                params("input: base01.txt\noutput: out2.txt\nbar: test8\neee: whoo"),
+                params("input: base01.txt\noutput: out3.txt\nbar: test7\niii: whee"),
+                params("input: base01.txt\noutput: out4.txt\nbar: test6\n")
+            ],
+        },
+    ], descriptor: "uh".to_owned(), exclude: Some("eee".to_owned()), include: None}, &mut io);
+    assert_eq!(2, io.written.len());
+    io.assert_written("build/out4.txt", "foo test6 yay");
+    io.assert_written("build/out3.txt", "foo test7 yay");
+}
+
+#[test]
+fn Build_multiple_pages_includes_exclude() {
+    let mut io = setup_io();
+    runs(BuildAction::BuildMultiplePages{default_params: params("{}"), on: vec![
+        BuildMultiplePages{
+            mapping: params("{}"),
+            files: vec![],
+            params: vec![
+                params("input: base01.txt\noutput: out1.txt\nbar: test9\niii: whee\neee: whoo"),
+                params("input: base01.txt\noutput: out2.txt\nbar: test8\neee: whoo"),
+                params("input: base01.txt\noutput: out3.txt\nbar: test7\niii: whee"),
+                params("input: base01.txt\noutput: out4.txt\nbar: test6\n")
+            ],
+        },
+    ], descriptor: "uh".to_owned(), exclude: Some("eee".to_owned()), include: Some("iii".to_owned())}, &mut io);
+    assert_eq!(1, io.written.len());
+    io.assert_written("build/out3.txt", "foo test7 yay");
 }

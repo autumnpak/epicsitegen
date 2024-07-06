@@ -67,6 +67,8 @@ pub enum BuildAction {
         descriptor: String,
         default_params: YamlMap,
         on: Vec<BuildMultiplePages>,
+        include: Option<String>,
+        exclude: Option<String>,
     },
     CopyFiles {to: String, from: String},
 }
@@ -101,12 +103,12 @@ impl BuildAction {
                     from: from.to_owned(),
                 }])
             },
-            BuildAction::BuildMultiplePages{default_params, on, ..} => {
+            BuildAction::BuildMultiplePages{default_params, on, include, exclude, ..} => {
                 let mut entries: Vec<SourcedParams> = vec![];
                 for mut source in map_m_ref_index(on, |idx, xx| build_multiple_pages_files(xx, idx, io))? {
                     entries.append(&mut source);
                 };
-                build_multiple_pages_map_params(default_params, entries, pipes, io, context)
+                build_multiple_pages_map_params(default_params, entries, &include, &exclude, pipes, io, context)
             },
         }
     }
@@ -196,18 +198,37 @@ fn build_multiple_pages_files(
 fn build_multiple_pages_map_params(
     default_params: &YamlMap,
     values: Vec<SourcedParams>,
+    include: &Option<String>,
+    exclude: &Option<String>,
     pipes: &PipeMap,
     io: &mut impl ReadsFiles,
     context: &TemplateContext,
 ) -> Result<Vec<BuildActionExpanded>, BuildError> {
-    map_m_mut(values, |ii: SourcedParams| {
+    let mut result = Vec::new();
+    for ii in values {
         let mut params: YamlMap = default_params.to_owned();
         params.extend(ii.params);
         let mapped = apply_mapping(&params, &ii.mapping, &ii.source, pipes, io, context)?;
-        let output = lookup_str_from_yaml_map("output", &mapped).map_err(|_| BuildError::BMOutputNotSpecified(ii.source.clone()))?;
-        let input = lookup_str_from_yaml_map("input", &mapped).map_err(|_| BuildError::BMInputNotSpecified(output.to_owned(), ii.source.clone()))?;
-        Ok(BuildActionExpanded::BuildPage{input: input.to_owned(), output: output.to_owned(), params: mapped.to_owned(), source: Some(ii.source)})
-    })
+        let output = lookup_str_from_yaml_map("output", &mapped).map_err(|_|
+            BuildError::BMOutputNotSpecified(ii.source.clone())
+        )?;
+        let input = lookup_str_from_yaml_map("input", &mapped).map_err(|_|
+            BuildError::BMInputNotSpecified(output.to_owned(), ii.source.clone())
+            )?;
+        let included = if let Some(ss) = include {
+            mapped.contains_key(&YamlValue::String(ss.to_owned()))
+        } else {true};
+        let excluded = if let Some(ss) = exclude {
+            !mapped.contains_key(&YamlValue::String(ss.to_owned()))
+        } else {true};
+        if included && excluded {
+            result.push(BuildActionExpanded::BuildPage{
+                input: input.to_owned(), output: output.to_owned(),
+                params: mapped.to_owned(), source: Some(ii.source)
+            });
+        }
+    }
+    Ok(result)
 }
 
 pub fn apply_mapping<'a>(

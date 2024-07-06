@@ -80,6 +80,8 @@ pub fn yaml_map_to_buildaction<'a>(
             let default = lookup_yaml_hash("default", mapping)?;
             let with_value_raw = lookup_yaml("with", mapping);
             let with_value = ensure_array_of_hash(with_value_raw, "with")?;
+            let include = lookup_yaml_str("include", mapping).ok().map(|ii| ii.to_owned());
+            let exclude = lookup_yaml_str("exclude", mapping).ok().map(|ii| ii.to_owned());
             let withs = map_m(with_value, |ii| {
                 let filesraw = lookup_yaml("files", ii);
                 let files = ensure_array_of_string(filesraw, "files")?;
@@ -100,7 +102,8 @@ pub fn yaml_map_to_buildaction<'a>(
                 })
             })?;
             Ok(BuildAction::BuildMultiplePages{
-                on: withs, default_params: default.to_owned(), descriptor: descriptor.to_owned()
+                on: withs, include, exclude,
+                default_params: default.to_owned(), descriptor: descriptor.to_owned()
             })
         },
         _ => Err(LayoutError::UnexpectedType(actiontype.to_owned())),
