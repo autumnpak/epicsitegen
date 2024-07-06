@@ -82,7 +82,14 @@ fn parse_value(pair: Pair<Rule>) -> TemplateValue {
       let name = inner.next().unwrap().as_str().to_string();
       let accesses: Vec<TemplateValueAccess> = inner.map(|ii| match ii.as_rule() {
         Rule::field => TemplateValueAccess::Field(ii.into_inner().as_str().to_string()),
-        Rule::index => TemplateValueAccess::Index(ii.into_inner().as_str().parse::<usize>().unwrap()),
+        Rule::index => {
+          let inner = ii.into_inner().next().unwrap();
+          match inner.as_rule() {
+            Rule::numbers => TemplateValueAccess::Index(inner.as_str().parse::<usize>().unwrap()),
+            Rule::value => TemplateValueAccess::IndexAt(parse_value(inner)),
+            _ => unreachable!("parse file element")
+          }
+        } 
         _ => unreachable!(),
       }).collect();
       TemplateValue{ base: name, accesses }

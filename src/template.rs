@@ -70,7 +70,8 @@ pub struct TemplateValue {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TemplateValueAccess {
     Field(String),
-    Index(usize)
+    Index(usize),
+    IndexAt(TemplateValue),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -88,6 +89,7 @@ pub enum TemplateError {
     ParseError(String),
     SerialisationError(String),
     IndexOOB(String, usize),
+    IndexWithNonIntegerValue(String, TemplateValue),
     FieldNotPresent(String, String),
     IndexOnUnindexable(String, usize),
     FieldOnUnfieldable(String, String),
@@ -109,7 +111,8 @@ impl std::fmt::Display for TemplateValueAccess {
     fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TemplateValueAccess::Field(strr) => write!(ff, ".{}", strr),
-            TemplateValueAccess::Index(strr) => write!(ff, ".{}", strr),
+            TemplateValueAccess::Index(strr) => write!(ff, "[{}]", strr),
+            TemplateValueAccess::IndexAt(strr) => write!(ff, "[{}]", strr),
         }
     }
 }
@@ -131,6 +134,7 @@ impl std::fmt::Display for TemplateError {
             TemplateError::ParseError(strr) => write!(ff, "Parsing the templating text failed: {}", strr),
             TemplateError::SerialisationError(strr) => write!(ff, "Failed to serialise a value: {}", strr),
             TemplateError::IndexOOB(strr, idx) => write!(ff, "Index {} of {} is out of bounds", idx, strr),
+            TemplateError::IndexWithNonIntegerValue(strr, idx) => write!(ff, "{} isn't an integer, so it can't index {}", idx, strr),
             TemplateError::IndexOnUnindexable(strr, idx) => write!(ff, "{} isn't indexable, so can't be indexed at {}", strr, idx),
             TemplateError::FieldNotPresent(strr, idx) => write!(ff, "{} has no property named {}", strr, idx),
             TemplateError::FieldOnUnfieldable(strr, idx) => write!(ff, "{} has no properties, so field {} can't be accessed", strr, idx),

@@ -68,13 +68,33 @@ pub fn lookup_value<'a, 'b>(value: &'a TemplateValue, params: &'a YamlMap) -> Re
                     Yaml::Array(array) => {
                         let index = ii.to_owned();
                         if index >= array.len() {
-                            Err(TemplateError::IndexOOB(path.to_owned(), ii.to_owned()))?
+                            Err(TemplateError::IndexOOB(path.to_owned(), index))?
                         } else {
                             path = format!("{}[{}]", path, ii);
                             current = &array[index];
                         }
                     },
                     _ => Err(TemplateError::IndexOnUnindexable(path.to_owned(), ii.to_owned()))?,
+                }
+            } ,
+            TemplateValueAccess::IndexAt(ii) => {
+                let indexval = lookup_value(ii, params)?;
+                match indexval {
+                    YamlValue::Integer(size) => {
+                        let index = size as usize;
+                        match current {
+                            Yaml::Array(array) => {
+                                if index >= array.len() {
+                                    Err(TemplateError::IndexOOB(path.to_owned(), index))?
+                                } else {
+                                    path = format!("{}[{}]", path, ii);
+                                    current = &array[index];
+                                }
+                            }
+                            _ => Err(TemplateError::IndexOnUnindexable(path.to_owned(), index))?,
+                        }
+                    },
+                    _ => Err(TemplateError::IndexWithNonIntegerValue(path.to_owned(), ii.to_owned()))?,
                 }
             } ,
             TemplateValueAccess::Field(ff) => {

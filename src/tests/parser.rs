@@ -120,6 +120,16 @@ fn Replacement_with_index_access() {
 }
 
 #[test]
+fn Replacement_with_index_value_access() {
+    accept("foo {{bar[at]}} yay", "bar: [a, b, c, d]\nat: 1", "foo b yay");
+}
+
+#[test]
+fn Replacement_with_complex_index_value_access() {
+    accept("foo {{bar[at.within]}} yay", "bar: [a, b, c, d]\nat:\n  within: 3", "foo d yay");
+}
+
+#[test]
 fn Index_out_of_bounds() {
     reject("foo {{bar[88]}} yay", "bar: [a, b, c, d]", TemplateError::IndexOOB("bar".to_owned(), 88));
 }
