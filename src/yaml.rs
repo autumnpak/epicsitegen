@@ -6,7 +6,7 @@ use yaml_rust2::{
 };
 use yaml_rust2::yaml::Yaml::String as YamlString;
 use crate::template::{TemplateError, TemplateValue, TemplateValueAccess};
-use crate::utils::{fold_m};
+use crate::utils::{MaybeRef};
 use crate::io::FileError;
 
 pub type YamlMap = Hash;
@@ -56,41 +56,74 @@ pub fn lookup_str_from_yaml_map<'a, 'b>(key: &'a str, mapping: &'a YamlMap) -> R
     }
 }
 
-pub fn lookup_value<'a, 'b>(value: &'a TemplateValue, params: &'a YamlMap) -> Result<&'a Yaml, TemplateError> {
+pub fn lookup_value<'a, 'b>(value: &'a TemplateValue, params: &'a YamlMap) -> Result<Yaml, TemplateError> {
     let base = lookup_yaml(&value.base, params)?;
     let mut path: String = value.base.to_owned();
-    fold_m(base, &value.accesses, |current, aa|
+    let mut last_owned = Yaml::Null;
+    let mut current = base;
+    for aa in &value.accesses {
         match aa {
             TemplateValueAccess::Index(ii) => {
                 match current {
                     Yaml::Array(array) => {
                         let index = ii.to_owned();
                         if index >= array.len() {
-                            Err(TemplateError::IndexOOB(path.to_owned(), ii.to_owned()))
+                            Err(TemplateError::IndexOOB(path.to_owned(), ii.to_owned()))?
                         } else {
                             path = format!("{}[{}]", path, ii);
-                            Ok(&array[index])
+                            current = &array[index];
                         }
                     },
-                    _ => Err(TemplateError::IndexOnUnindexable(path.to_owned(), ii.to_owned())),
+                    _ => Err(TemplateError::IndexOnUnindexable(path.to_owned(), ii.to_owned()))?,
                 }
             } ,
             TemplateValueAccess::Field(ff) => {
                 match current {
                     Yaml::Hash(hash) => {
                         match hash.get(&YamlString(ff.to_owned())) {
-                            None => Err(TemplateError::FieldNotPresent(path.to_owned(), ff.to_owned())),
+                            None => Err(TemplateError::FieldNotPresent(path.to_owned(), ff.to_owned()))?,
                             Some(val) => {
                                 path = format!("{}.{}", path, ff);
-                                Ok(val)
+                                current = val;
                             },
                         }
                     },
-                    _ => Err(TemplateError::FieldOnUnfieldable(path.to_owned(), ff.to_owned())),
+                    Yaml::Array(aa) => {
+                        match lookup_array_property(ff, aa, path.to_owned()) {
+                            Err(ee) => Err(ee)?,
+                            Ok(val) => {
+                                path = format!("{}.{}", path, ff);
+                                match val {
+                                    MaybeRef::Ref(rr) => current = rr,
+                                    MaybeRef::Owned(rr) => {
+                                        last_owned = rr;
+                                        current = &last_owned;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    _ => Err(TemplateError::FieldOnUnfieldable(path.to_owned(), ff.to_owned()))?,
                 }
             },
         }
-    )
+    }
+    Ok(current.to_owned())
+}
+
+pub fn lookup_array_property<'a, 'b>(key: &'a str, arr: &'a Vec<Yaml>, path: String) -> Result<MaybeRef<'a, Yaml>, TemplateError> {
+    match key {
+        "last" => match arr.last() {
+            None => Ok(MaybeRef::Owned(YamlValue::Null)),
+            Some(ss) => Ok(MaybeRef::Ref(ss))
+        }
+        "first" => match arr.first() {
+            None => Ok(MaybeRef::Owned(YamlValue::Null)),
+            Some(ss) => Ok(MaybeRef::Ref(ss))
+        }
+        "count" => Ok(MaybeRef::Owned(YamlValue::Integer(arr.len() as i64))),
+        _ => Err(TemplateError::FieldNotPresent(path.to_owned(), key.to_owned())),
+    }
 }
 
 pub fn tostr(value: &Yaml) -> Result<String, TemplateError> {

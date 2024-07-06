@@ -1,3 +1,8 @@
+pub enum MaybeRef<'a, T> {
+    Owned(T),
+    Ref(&'a T)
+}
+
 pub fn fold_m<'a, A, B, E>(
     start: &'a B,
     list: &'a Vec<A>,

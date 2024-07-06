@@ -100,6 +100,21 @@ fn Deeper_bad_field_access() {
 }
 
 #[test]
+fn array_length() {
+    accept("foo {{bar.count}} yay", "bar: [2, 3, 4, 5, 7, 9]", "foo 6 yay");
+}
+
+#[test]
+fn array_first() {
+    accept("foo {{bar.first}} yay", "bar: [2, 3, 4, 5, 7, 9]", "foo 2 yay");
+}
+
+#[test]
+fn array_last() {
+    accept("foo {{bar.last}} yay", "bar: [2, 3, 4, 5, 7, 9]", "foo 9 yay");
+}
+
+#[test]
 fn Replacement_with_index_access() {
     accept("foo {{bar[1]}} yay", "bar: [a, b, c, d]", "foo b yay");
 }

@@ -9,7 +9,6 @@ use crate::yaml::{
 };
 use crate::parsers::parse_template_string;
 use crate::io::{ReadsFiles, FileError};
-use crate::utils::{map_m};
 use crate::pipes::{
     Pipe, PipeMap, execute_pipes, PipeInputSource
 };
@@ -153,7 +152,7 @@ impl TemplateElement {
             TemplateElement::PlainText(text) => Ok(text.clone()),
             TemplateElement::Replace{value, pipe} => {
                 let lookup = lookup_value(value, params)?;
-                let piped = execute_pipes(lookup, &pipe, params, PipeInputSource::Value(&value), pipes, io, context)?;
+                let piped = execute_pipes(&lookup, &pipe, params, PipeInputSource::Value(&value), pipes, io, context)?;
                 tostr(&piped)
             },
             TemplateElement::File{snippet, filename, pipe} => {
@@ -172,7 +171,7 @@ impl TemplateElement {
             TemplateElement::FileAt{snippet, value, value_pipe, contents_pipe} => {
                 let lookup = lookup_value(value, params)?;
                 let piped_filename = execute_pipes(
-                    lookup, value_pipe, params, PipeInputSource::Value(&value), pipes, io, context
+                    &lookup, value_pipe, params, PipeInputSource::Value(&value), pipes, io, context
                 )?;
                 let filename = tostr(&piped_filename)?;
                 let real_filename = format!("{}{}", if *snippet {&context.snippet_folder} else {""}, filename);
@@ -261,7 +260,7 @@ impl TemplateElement {
                             Some(ss) => {
                                 let keylookup = lookup_value(&ss, &new_params)
                                     .map_err(|ee| TemplateError::OnForLoopIterationSortKey(Box::new(ee), ii.1.to_string()))?;
-                                tostr(keylookup)
+                                tostr(&keylookup)
                                     .map_err(|ee| TemplateError::OnForLoopIterationSortKey(Box::new(ee), ii.1.to_string()))?
                             }
                         };
@@ -313,7 +312,7 @@ fn for_make_iterable<'a>(
     for gg in groupings {
         for value in gg.values.iter() {
             let lookup = lookup_value(&value, params)?;
-            let as_vec = to_iterable(lookup)?;
+            let as_vec = to_iterable(&lookup)?;
             for (ind, finalval) in as_vec.into_iter().enumerate() {
                 entries.push(ForIteration(finalval, ForIterationType::Values(&value, ind)));
             }
@@ -328,7 +327,7 @@ fn for_make_iterable<'a>(
         }
         for fileat in gg.files_at.iter() {
             let lookup = lookup_value(&fileat, params)?;
-            let filename = tostr(lookup)?;
+            let filename = tostr(&lookup)?;
             let file = io.read_yaml(&filename)
                 .map_err(|xx| TemplateError::YamlFileError(xx))?;
             let as_vec = to_iterable(file)?;
