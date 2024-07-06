@@ -57,6 +57,7 @@ fn Build_no_multiple_pages() {
             mapping: params("{}"),
             files: vec![],
             params: vec![],
+            flatten: None,
         },
     ], descriptor: "uh".to_owned(), include: None, exclude: None}, &mut io);
     assert_eq!(0, io.written.len());
@@ -73,6 +74,7 @@ fn Build_multiple_pages_not_from_files() {
                 params("input: base01.txt\noutput: out1.txt\nbar: test"),
                 params("input: base01.txt\noutput: out2.txt\nbar: testing"),
             ],
+            flatten: None,
         },
     ], descriptor: "uh".to_owned(), include: None, exclude: None}, &mut io);
     assert_eq!(2, io.written.len());
@@ -91,6 +93,7 @@ fn Build_multiple_pages_mapping() {
                 params("input: base03.txt\noutput: out1.txt\nbar: test\nyay: nah"),
                 params("input: base03.txt\noutput: out2.txt\nbar: testing\nyay: nah2"),
             ],
+            flatten: None,
         },
     ], descriptor: "uh".to_owned(), include: None, exclude: None}, &mut io);
     assert_eq!(2, io.written.len());
@@ -111,6 +114,7 @@ fn Build_multiple_pages_include() {
                 params("input: base01.txt\noutput: out3.txt\nbar: test7\niii: whee"),
                 params("input: base01.txt\noutput: out4.txt\nbar: test6\n")
             ],
+            flatten: None,
         },
     ], descriptor: "uh".to_owned(), include: Some("iii".to_owned()), exclude: None}, &mut io);
     assert_eq!(2, io.written.len());
@@ -131,6 +135,7 @@ fn Build_multiple_pages_exclude() {
                 params("input: base01.txt\noutput: out3.txt\nbar: test7\niii: whee"),
                 params("input: base01.txt\noutput: out4.txt\nbar: test6\n")
             ],
+            flatten: None,
         },
     ], descriptor: "uh".to_owned(), exclude: Some("eee".to_owned()), include: None}, &mut io);
     assert_eq!(2, io.written.len());
@@ -151,8 +156,28 @@ fn Build_multiple_pages_includes_exclude() {
                 params("input: base01.txt\noutput: out3.txt\nbar: test7\niii: whee"),
                 params("input: base01.txt\noutput: out4.txt\nbar: test6\n")
             ],
+            flatten: None,
         },
     ], descriptor: "uh".to_owned(), exclude: Some("eee".to_owned()), include: Some("iii".to_owned())}, &mut io);
     assert_eq!(1, io.written.len());
     io.assert_written("build/out3.txt", "foo test7 yay");
+}
+
+#[test]
+fn build_multiple_pages_flatten() {
+    let mut io = setup_io();
+    runs(BuildAction::BuildMultiplePages{default_params: params("{}"), on: vec![
+        BuildMultiplePages{
+            mapping: params("{output: \"out{{flat}}.txt\"}"),
+            files: vec![],
+            params: vec![
+                params("input: base04.txt\nbar: test\nflat: [99, 88, 77]"),
+            ],
+            flatten: Some("flat".to_owned()),
+        },
+    ], descriptor: "uh".to_owned(), include: None, exclude: None}, &mut io);
+    assert_eq!(3, io.written.len());
+    io.assert_written("build/out99.txt", "0 99\n---\n- 99\n- 88\n- 77");
+    io.assert_written("build/out88.txt", "1 88\n---\n- 99\n- 88\n- 77");
+    io.assert_written("build/out77.txt", "2 77\n---\n- 99\n- 88\n- 77");
 }

@@ -95,10 +95,12 @@ pub fn yaml_map_to_buildaction<'a>(
                     Err(LayoutError::MissingKey(_)) => Ok(new_yaml_map()),
                     Err(ee) => Err(ee)
                 }?;
+                let flatten = lookup_yaml_str("flatten", ii).ok().map(|ii| ii.to_owned());
                 Ok(BuildMultiplePages{
                     files: files.to_owned(),
                     params: params,
                     mapping: mapping_map,
+                    flatten,
                 })
             })?;
             Ok(BuildAction::BuildMultiplePages{

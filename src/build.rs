@@ -1,4 +1,4 @@
-use crate::yaml::{YamlMap, YamlValue, YamlFileError, lookup_str_from_yaml_map};
+use crate::yaml::{YamlMap, YamlValue, YamlFileError, lookup_str_from_yaml_map, lookup_yaml};
 use crate::template::{TemplateError, render, render_elements, TemplateContext};
 use crate::pipes::{PipeMap};
 use crate::io::{ReadsFiles, FileError};
@@ -20,6 +20,8 @@ pub enum BuildError {
     BMMappingParseError(String, String, ParamsSource),
     BMMappingTemplateError(TemplateError, String, ParamsSource),
     BMMappingIsntString(String, ParamsSource),
+    FlattenOnNonArray(String, ParamsSource),
+    FlattenKeyNotFound(String, ParamsSource),
 }
 
 impl std::fmt::Display for BuildError {
@@ -35,21 +37,33 @@ impl std::fmt::Display for BuildError {
             BuildError::BMMappingParseError(err, key, source) => write!(ff, "Can't parse mapping \"{}\" (at {}): {}", key, source, err),
             BuildError::BMMappingTemplateError(err, key, source) => write!(ff, "Can't parse mapping \"{}\" (at {}): {}", key, source, err),
             BuildError::BMMappingIsntString(key, source) => write!(ff, "Mapping \"{}\" (at {}) isn't a string", key, source),
+            BuildError::FlattenOnNonArray(key, source) => write!(ff, "Can't flatten with \"{}\" (on {}) as it isn't an array", key, source),
+            BuildError::FlattenKeyNotFound(key, source) => write!(ff, "Can't flatten with \"{}\" (on {}) as the value to flatten with wasn't found", key, source),
             BuildError::BMSourced(source, err) => write!(ff, "{}\nat {}", err, source),
         }
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct ParamsSource(usize, usize, Option<String>); //"on" grouping, array index, filename
+pub struct ParamsSource{
+    pub grouping: usize, 
+    pub index: usize, 
+    pub flatten_index: Option<usize>,
+    pub file: Option<String>, 
+}
 
 impl std::fmt::Display for ParamsSource {
     fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.2.clone() {
+        match &self.file {
             Some(ss) => write!(ff, "{}", ss),
             None => write!(ff, "(specified params)"),
         }?;
-        write!(ff, ":{} in grouping {}", self.1, self.0)
+        write!(ff, ":{}", self.index)?;
+        match &self.flatten_index {
+            Some(ss) => write!(ff, " (flatten result {})", ss),
+            None => write!(ff, ""),
+        }?;
+        write!(ff, " in grouping {}", self.grouping)
     }
 }
 
@@ -57,8 +71,9 @@ impl std::fmt::Display for ParamsSource {
 pub struct SourcedParams {
     pub params: YamlMap,
     pub source: ParamsSource,
-    pub mapping: YamlMap
-} //params, source, mapping
+    pub mapping: YamlMap,
+    pub flatten: Option<String>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuildAction {
@@ -84,6 +99,7 @@ pub struct BuildMultiplePages {
     pub files: Vec<String>,
     pub params: Vec<YamlMap>,
     pub mapping: YamlMap,
+    pub flatten: Option<String>,
 }
 
 impl BuildAction {
@@ -108,7 +124,9 @@ impl BuildAction {
                 for mut source in map_m_ref_index(on, |idx, xx| build_multiple_pages_files(xx, idx, io))? {
                     entries.append(&mut source);
                 };
-                build_multiple_pages_map_params(default_params, entries, &include, &exclude, pipes, io, context)
+                build_multiple_pages_map_params(
+                    default_params, entries, &include, &exclude, 
+                    pipes, io, context)
             },
         }
     }
@@ -178,8 +196,11 @@ fn build_multiple_pages_files(
             YamlValue::Hash(hh) => Ok(entries.push(
                     SourcedParams{
                         params: hh.to_owned(),
-                        source: ParamsSource(group_index, idx, Some(file.to_owned())),
-                        mapping: on.mapping.to_owned()
+                        source: ParamsSource {
+                            grouping: group_index, index: idx, file: Some(file.to_owned()), flatten_index: None
+                        },
+                        mapping: on.mapping.to_owned(),
+                        flatten: on.flatten.clone(),
                     }
             )),
             _ => Err(BuildError::BMFContainsNonMap(file.to_owned(), idx))
@@ -188,8 +209,11 @@ fn build_multiple_pages_files(
     for (idx, param) in on.params.iter().enumerate() {
         entries.push(SourcedParams{
             params: param.to_owned(),
-            source: ParamsSource(group_index, idx, None),
-            mapping: on.mapping.to_owned()
+            source: ParamsSource{
+                grouping: group_index, index: idx, file: None, flatten_index: None
+            },
+            mapping: on.mapping.to_owned(),
+            flatten: on.flatten.clone(),
         })
     }
     Ok(entries)
@@ -208,24 +232,46 @@ fn build_multiple_pages_map_params(
     for ii in values {
         let mut params: YamlMap = default_params.to_owned();
         params.extend(ii.params);
-        let mapped = apply_mapping(&params, &ii.mapping, &ii.source, pipes, io, context)?;
-        let output = lookup_str_from_yaml_map("output", &mapped).map_err(|_|
-            BuildError::BMOutputNotSpecified(ii.source.clone())
-        )?;
-        let input = lookup_str_from_yaml_map("input", &mapped).map_err(|_|
-            BuildError::BMInputNotSpecified(output.to_owned(), ii.source.clone())
+        let flattened = if let Some(flat) = &ii.flatten { 
+            match lookup_yaml(&flat, &params) {
+                Ok(fullarray @ YamlValue::Array(aa)) => Ok(aa.iter().enumerate().map(|(ind, flatarr)| {
+                    let mut newparams = params.clone();
+                    newparams.insert(YamlValue::String("_flatten_array".to_owned()), fullarray.clone());
+                    newparams.insert(YamlValue::String("_flatten_index".to_owned()), YamlValue::Integer(ind as i64));
+                    newparams.insert(YamlValue::String(flat.to_owned()), flatarr.clone());
+                    let mut new_source = ii.source.to_owned();
+                    new_source.flatten_index = Some(ind);
+                    (newparams, new_source)
+                }).collect()),
+                Ok(..) => Err(BuildError::FlattenOnNonArray(flat.to_owned(), ii.source.to_owned())),
+                Err(..) => Err(BuildError::FlattenKeyNotFound(flat.to_owned(), ii.source.to_owned())),
+            }
+        } else { Ok(vec![(params, ii.source)]) }?;
+        let mut mapped = Vec::new();
+        for ff in flattened {
+            mapped.push((apply_mapping(&ff.0, &ii.mapping, &ff.1, pipes, io, context)?, ff.1));
+        }
+        for ff in mapped {
+            let source = ff.1;
+            let finalparams = ff.0;
+            let output = lookup_str_from_yaml_map("output", &finalparams).map_err(|_|
+                BuildError::BMOutputNotSpecified(source.clone())
             )?;
-        let included = if let Some(ss) = include {
-            mapped.contains_key(&YamlValue::String(ss.to_owned()))
-        } else {true};
-        let excluded = if let Some(ss) = exclude {
-            !mapped.contains_key(&YamlValue::String(ss.to_owned()))
-        } else {true};
-        if included && excluded {
-            result.push(BuildActionExpanded::BuildPage{
-                input: input.to_owned(), output: output.to_owned(),
-                params: mapped.to_owned(), source: Some(ii.source)
-            });
+            let input = lookup_str_from_yaml_map("input", &finalparams).map_err(|_|
+                BuildError::BMInputNotSpecified(output.to_owned(), source.clone())
+                )?;
+            let included = if let Some(ss) = include {
+                finalparams.contains_key(&YamlValue::String(ss.to_owned()))
+            } else {true};
+            let excluded = if let Some(ss) = exclude {
+                !finalparams.contains_key(&YamlValue::String(ss.to_owned()))
+            } else {true};
+            if included && excluded {
+                result.push(BuildActionExpanded::BuildPage{
+                    input: input.to_owned(), output: output.to_owned(),
+                    params: finalparams.to_owned(), source: Some(source.to_owned())
+                });
+            }
         }
     }
     Ok(result)

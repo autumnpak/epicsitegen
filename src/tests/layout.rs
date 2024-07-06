@@ -43,6 +43,7 @@ fn parses_build_multiple_ok() {
             mapping: params("{foo: asd}"),
             files: vec!["yeah".to_owned()],
             params: vec![params("{um2: yeah2}")],
+            flatten: None,
         },
     ], descriptor: "uh".to_owned(), include: None, exclude: None}]), parsed);
 }
@@ -60,6 +61,7 @@ fn build_multiple_allows_no_files() {
             mapping: params("{foo: asd}"),
             files: vec![],
             params: vec![params("{um2: yeah2}")],
+            flatten: None,
         },
     ], descriptor: "uh".to_owned(), include: None, exclude: None}]), parsed);
 }
@@ -77,6 +79,7 @@ fn build_multiple_allows_no_params() {
             mapping: params("{foo: asd}"),
             files: vec!["yeah".to_owned()],
             params: vec![],
+            flatten: None,
         },
     ], descriptor: "uh".to_owned(), include: None, exclude: None}]), parsed);
 }
@@ -97,6 +100,27 @@ fn build_multiple_include_exclude() {
             mapping: params("{foo: asd}"),
             files: vec!["yeah".to_owned()],
             params: vec![params("{um2: yeah2}")],
+            flatten: None,
         },
     ], descriptor: "uh".to_owned(), include: Some("iii".to_owned()), exclude: Some("eee".to_owned())}]), parsed);
+}
+
+#[test]
+fn build_multiple_flatten() {
+    let parsed = layout_string_to_buildactions("- type: build-multiple
+  description: uh
+  default: {um: yeah}
+  with:
+    - files: [yeah]
+      params: [{um2: yeah2}]
+      mapping: {foo: asd}
+      flatten: flattt");
+    assert_eq!(Ok(vec![BuildAction::BuildMultiplePages{default_params: params("{um: yeah}"), on: vec![
+        BuildMultiplePages{
+            mapping: params("{foo: asd}"),
+            files: vec!["yeah".to_owned()],
+            params: vec![params("{um2: yeah2}")],
+            flatten: Some("flattt".to_owned()),
+        },
+    ], descriptor: "uh".to_owned(), include: None, exclude: None}]), parsed);
 }
