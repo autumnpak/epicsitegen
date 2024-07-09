@@ -244,7 +244,7 @@ fn build_multiple_pages_map_params(
                     (newparams, new_source)
                 }).collect()),
                 Ok(..) => Err(BuildError::FlattenOnNonArray(flat.to_owned(), ii.source.to_owned())),
-                Err(..) => Err(BuildError::FlattenKeyNotFound(flat.to_owned(), ii.source.to_owned())),
+                Err(..) => if &ii.flatten == include { Ok(Vec::new()) } else { Err(BuildError::FlattenKeyNotFound(flat.to_owned(), ii.source.to_owned())) },
             }
         } else { Ok(vec![(params, ii.source)]) }?;
         let mut mapped = Vec::new();
