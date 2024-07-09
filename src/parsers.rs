@@ -101,7 +101,7 @@ fn parse_value(pair: Pair<Rule>) -> TemplateValue {
 fn parse_pipes(pairs: &mut Pairs<Rule>) -> Vec<Pipe> {
   fn parse_named_pipe(pairs: &mut Pairs<Rule>) -> Pipe {
     let name = pairs.next().unwrap().as_str().to_owned();
-    let params = pairs.map(|ii| ii.as_str().to_owned()).collect();
+    let params = pairs.map(|ii| ii.as_str()[1..ii.as_str().len()].to_owned()).collect();
     Pipe::Named{name, params}
   }
   pairs.map(|xx| match xx.as_rule() {

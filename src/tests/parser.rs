@@ -305,6 +305,11 @@ fn replacement_with_pipe_template_3() {
 }
 
 #[test]
+fn replacement_with_pipe_template_with_params() {
+    accept("foo {{bar | test3 whee and so on}} yay", "bar: test", "foo um4 test whee and yay");
+}
+
+#[test]
 fn replacement_with_function_pipe_1() {
     accept("foo {{bar | testfn}} yay", "bar: {nah: yeah}", "foo bleh yay");
 }

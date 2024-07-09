@@ -17,13 +17,14 @@ pub enum Pipe {
 }
 
 pub enum PipeDefinition {
-    Template(Vec<TemplateElement>),
+    Template(Vec<TemplateElement>, u128),
     Fn(
         fn(
             &YamlValue,
+            &Vec<String>,
             &PipeMap,
             &ReadsFilesImpl,
-        ) -> Result<YamlValue, String>
+        ) -> Result<YamlValue, String>, u128
     )
 }
 
@@ -58,9 +59,9 @@ pub fn execute_pipes<'a>(
     let mut current = value.clone();
     for (ind, ii) in pipes.iter().enumerate() {
         match ii {
-            Pipe::Named{name, ..} => {
+            Pipe::Named{name, params} => {
                 current = execute_named_pipe(
-                    &current, name, ind, 
+                    &current, name, params, ind, 
                     &valuepath, pipemap, io, context,
                 )?;
             },
@@ -78,6 +79,7 @@ pub fn execute_pipes<'a>(
 pub fn execute_named_pipe<'a>(
     value: &'a YamlValue,
     pipe: &str,
+    pipe_params: &Vec<String>,
     index: usize,
     valuepath: &PipeInputSource<'a>,
     pipemap: &'a PipeMap,
@@ -85,8 +87,11 @@ pub fn execute_named_pipe<'a>(
     context: &TemplateContext,
 ) -> Result<YamlValue, TemplateError> {
     match pipemap.get(pipe) {
-        Some(PipeDefinition::Template(elements)) => {
+        Some(PipeDefinition::Template(elements, _)) => {
             let mut map = new_yaml_map();
+            map.insert(YamlValue::String("params".to_owned()), YamlValue::Array(pipe_params.iter().map(
+                    |ii| YamlValue::String(ii.clone())
+            ).collect()));
             let params_map = match value {
                 YamlValue::Hash(map) => map,
                  _ => {
@@ -94,15 +99,15 @@ pub fn execute_named_pipe<'a>(
                     &map
                 }
             };
-            let rendered = render_elements(elements, params_map, pipemap, io, context,)
+            let rendered = render_elements(elements, &params_map, pipemap, io, context,)
                 .map_err(|ee| TemplateError::WithinTemplateNamedPipe(Box::new(ee), pipe.to_owned(), index, valuepath.to_string()))?;
             Ok(YamlValue::String(rendered))
         },
-        Some(PipeDefinition::Fn(func)) => {
+        Some(PipeDefinition::Fn(func, _)) => {
             let ioimpl: ReadsFilesImpl = ReadsFilesImpl {
                 read: &|filename| io.read(filename).map(|ii| ii.to_owned())
             };
-            match func(value, pipemap, &ioimpl) {
+            match func(value, pipe_params, pipemap, &ioimpl) {
                 Ok(strr) => Ok(strr),
                 Err(ee) => Err(TemplateError::PipeExecutionError(ee, pipe.to_owned(), index, valuepath.to_string()))
             }

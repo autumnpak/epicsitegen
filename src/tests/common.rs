@@ -64,11 +64,12 @@ pub fn setup_io() -> TestFileCache {
 
 pub fn setup_pipes() -> PipeMap {
     let mut pipemap = new_pipe_map();
-    pipemap.insert("test0".to_string(), PipeDefinition::Template(parse_template_string("um1").unwrap()));
-    pipemap.insert("test1".to_string(), PipeDefinition::Template(parse_template_string("um2 {{it}}").unwrap()));
-    pipemap.insert("test2".to_string(), PipeDefinition::Template(parse_template_string("um3 {{nah}}").unwrap()));
-    pipemap.insert("txt".to_string(), PipeDefinition::Template(parse_template_string("{{it}}.txt").unwrap()));
-    pipemap.insert("testfn".to_string(), PipeDefinition::Fn(|_input, _pipes, _io| Ok(Yaml::String("bleh".to_owned()))));
+    pipemap.insert("test0".to_string(), PipeDefinition::Template(parse_template_string("um1").unwrap(), 0));
+    pipemap.insert("test1".to_string(), PipeDefinition::Template(parse_template_string("um2 {{it}}").unwrap(), 0));
+    pipemap.insert("test2".to_string(), PipeDefinition::Template(parse_template_string("um3 {{nah}}").unwrap(), 0));
+    pipemap.insert("test3".to_string(), PipeDefinition::Template(parse_template_string("um4 {{it}} {{params[0]}} {{params[1]}}").unwrap(), 0));
+    pipemap.insert("txt".to_string(), PipeDefinition::Template(parse_template_string("{{it}}.txt").unwrap(), 0));
+    pipemap.insert("testfn".to_string(), PipeDefinition::Fn(|_input, _params, _pipes, _io| Ok(Yaml::String("bleh".to_owned())), 0));
     pipemap
 }
 
