@@ -1,4 +1,6 @@
 use crate::yaml::{YamlValue, YamlFileError, load_yaml};
+use crate::template::{TemplateElement};
+use crate::parsers::{parse_template_string};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::path::{Path, PathBuf};
@@ -15,6 +17,7 @@ pub enum FileError {
     FileCantBeWritten(String),
     FilesCantBeCopied(String),
     CantCopyDirIntoFile(String, String),
+    TemplateFileFailedParsing(String, String),
 }
 
 impl std::fmt::Display for FileError {
@@ -25,6 +28,7 @@ impl std::fmt::Display for FileError {
             FileError::FileCantBeWritten(strr) => write!(ff, "Can't write to the file {}", strr),
             FileError::FilesCantBeCopied(strr) => write!(ff, "Can't copy the files at {}", strr),
             FileError::CantCopyDirIntoFile(from, to) => write!(ff, "Can't copy {} into {} as its a file", from, to),
+            FileError::TemplateFileFailedParsing(file, error) => write!(ff, "Couldn't parse {} into templating:\n{}", file, error),
         }
     }
 }
@@ -33,6 +37,7 @@ pub trait ReadsFiles {
     fn read(&mut self, filename: &str) -> Result<&str, FileError>;
     fn write(&mut self, filename: &str, contents: &str) -> Result<(), FileError>;
     fn read_yaml(&mut self, filename: &str) -> Result<&YamlValue, YamlFileError>;
+    fn read_template(&mut self, filename: &str) -> Result<&Vec<TemplateElement>, FileError>;
     fn copy_files(&self, to: &str, from: &str) -> Result<(), FileError>;
 }
 
@@ -83,6 +88,13 @@ impl ReadsFiles for ThreadsafeFileCache {
         res
     }
 
+    fn read_template(&mut self, filename: &str) -> Result<&Vec<TemplateElement>, FileError> {
+        let lock = self.mutex.lock().unwrap();
+        let res = self.fc.read_template(filename);
+        drop(lock);
+        res
+    }
+
     fn copy_files(&self, to: &str, from: &str) -> Result<(), FileError> {
         let lock = self.mutex.lock().unwrap();
         let res = self.fc.copy_files(to, from);
@@ -94,6 +106,7 @@ impl ReadsFiles for ThreadsafeFileCache {
 pub struct FileCache {
     files: HashMap<String, (u128, String)>,
     yamls: HashMap<String, (u128, YamlValue)>,
+    templates: HashMap<String, (u128, Vec<TemplateElement>)>,
 }
 
 impl FileCache {
@@ -101,6 +114,7 @@ impl FileCache {
         FileCache {
             files: HashMap::new(),
             yamls: HashMap::new(),
+            templates: HashMap::new(),
         }
     }
 }
@@ -161,6 +175,36 @@ impl ReadsFiles for FileCache {
                 ee.insert((
                     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis(),
                     load_yaml(&contents).map_err(|xx| YamlFileError::Yaml(xx))?
+                ))
+            },
+        };
+        Ok(&got.1)
+    }
+
+    fn read_template(&mut self, filename: &str) -> Result<&Vec<TemplateElement>, FileError> {
+        let contentsref = self.read(filename)?;
+        let contents = contentsref.to_owned();
+        let got = match self.templates.entry(filename.to_owned()) {
+            Entry::Occupied(mut ee) => {
+                let filetime = fs::metadata(filename).unwrap().modified().unwrap()
+                    .duration_since(UNIX_EPOCH).unwrap().as_millis();
+                let entry: &(u128, Vec<TemplateElement>) = ee.get();
+                if filetime >= entry.0 {
+                    ee.insert((
+                        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis(),
+                        parse_template_string(&contents).map_err(
+                            |xx| FileError::TemplateFileFailedParsing(filename.to_owned(), xx.to_string())
+                        )?
+                    ));
+                }
+                ee.into_mut()
+            },
+            Entry::Vacant(ee) => {
+                ee.insert((
+                    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis(),
+                    parse_template_string(&contents).map_err(
+                        |xx| FileError::TemplateFileFailedParsing(filename.to_owned(), xx.to_string())
+                    )?
                 ))
             },
         };
