@@ -1,5 +1,10 @@
 use crate::template::{
-  TemplateElement, TemplateValue, TemplateValueAccess, ForGrouping, ForSortAndFilter
+  TemplateElement, 
+  TemplateValue, 
+  TemplateValueWithPipe,
+  TemplateValueAccess, 
+  ForGrouping, 
+  ForSortAndFilter
 };
 use crate::pipes::{
   Pipe
@@ -22,7 +27,7 @@ fn parse_ast_node(pair: Pair<Rule>) -> TemplateElement {
       let mut iter = pair.into_inner();
       TemplateElement::Replace {
         value: parse_value(iter.next().unwrap()),
-        pipe: parse_pipes(&mut iter.next().unwrap().into_inner()) 
+        pipe: parse_pipes(&mut iter.next().unwrap().into_inner()),
       }
     } ,
     Rule::snippet => parse_file_element(true, &mut pair.into_inner()),
@@ -119,6 +124,16 @@ fn parse_values(pairs: &mut Pairs<Rule>) -> Vec<TemplateValue> {
   pairs.map(|ii| { parse_value(ii) }).collect()
 }
 
+fn parse_values_with_pipes(pairs: &mut Pairs<Rule>) -> Vec<TemplateValueWithPipe> {
+  pairs.map(|ii| { parse_value_with_pipe(&mut ii.into_inner()) }).collect()
+}
+
+fn parse_value_with_pipe(pairs: &mut Pairs<Rule>) -> TemplateValueWithPipe {
+  let value = parse_value(pairs.next().unwrap());
+  let pipes = parse_pipes(&mut pairs.next().unwrap().into_inner());
+  TemplateValueWithPipe{ value, pipes }
+}
+
 fn parse_for_element(pairs: &mut Pairs<Rule>) -> TemplateElement {
   let name = pairs.next().unwrap().as_str().to_string();
   let grouping = parse_for_groups(&mut pairs.next().unwrap().into_inner());
@@ -184,14 +199,14 @@ fn parse_for_sort_filter(pairs: &mut Pairs<Rule>) -> ForSortAndFilter {
 }
 
 fn parse_for_groups(pairs: &mut Pairs<Rule>) -> ForGrouping {
-  let mut values: Vec<TemplateValue> = Vec::new();
+  let mut values: Vec<TemplateValueWithPipe> = Vec::new();
   let mut filenames: Vec<String> = Vec::new();
   let mut files_at: Vec<TemplateValue> = Vec::new();
   let mut running = true;
   while running {
     match pairs.next() {
       Some(pp) => match pp.as_rule() {
-        Rule::for_in => values = parse_values(&mut pp.into_inner().next().unwrap().into_inner()),
+        Rule::for_in => values = parse_values_with_pipes(&mut pp.into_inner().next().unwrap().into_inner()),
         Rule::for_in_file => filenames = parse_filenames(&mut pp.into_inner().next().unwrap().into_inner()),
         Rule::for_in_file_at => files_at = parse_values(&mut pp.into_inner().next().unwrap().into_inner()),
         _ => unreachable!("for loop grouping options"),

@@ -48,7 +48,7 @@ pub enum TemplateElement {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ForGrouping {
-    pub values: Vec<TemplateValue>,
+    pub values: Vec<TemplateValueWithPipe>,
     pub filenames: Vec<String>,
     pub files_at: Vec<TemplateValue>,
 }
@@ -65,6 +65,12 @@ pub struct ForSortAndFilter {
 pub struct TemplateValue {
     pub base: String,
     pub accesses: Vec<TemplateValueAccess>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TemplateValueWithPipe {
+    pub value: TemplateValue,
+    pub pipes: Vec<Pipe>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -229,7 +235,7 @@ impl TemplateElement {
                 rendered
             }
             TemplateElement::For{name, groupings, main, separator, sort_and_filter} => {
-                let over = for_make_iterable(params, groupings, io)?;
+                let over = for_make_iterable(params, groupings, pipes, io, context)?;
                 let mut mapped: Vec<(String, String)> = Vec::new();
                 for ii in over {
                     let mut new_params = params.clone();
@@ -310,14 +316,18 @@ struct ForIteration<'a>(YamlValue, ForIterationType<'a>, usize);
 fn for_make_iterable<'a>(
     params: & YamlMap,
     groupings: &'a Vec<ForGrouping>,
-    io: &mut impl ReadsFiles
+    pipes: &'a PipeMap,
+    io: &mut impl ReadsFiles,
+    context: &TemplateContext
 ) -> Result<Vec<ForIteration<'a>>, TemplateError> {
     let mut entries: Vec<ForIteration> = Vec::new();
     for gg in groupings {
-        for value in gg.values.iter() {
+        for vv in gg.values.iter() {
+            let value = &vv.value;
             let lookup = lookup_value(&value, params)?;
+            let piped = execute_pipes(&lookup, &vv.pipes, params, PipeInputSource::Value(&value), pipes, io, context)?;
             let location = ForIterationType::Values(&value);
-            let as_vec = to_iterable(&location, &lookup)?;
+            let as_vec = to_iterable(&location, &piped)?;
             for (ind, finalval) in as_vec.into_iter().enumerate() {
                 entries.push(ForIteration(finalval, location.clone(), ind));
             }

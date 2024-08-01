@@ -220,6 +220,11 @@ fn for_loop_0_values() {
 }
 
 #[test]
+fn for_loop_0_values_with_pipe() {
+    accept("foo {% for it in numbers | testfn2 %}{{it}} {% endfor %}yay", "numbers: whatever", "foo 1 2 yay");
+}
+
+#[test]
 fn for_loop_with_separator() {
     accept("foo {% for it in numbers, morenumbers %}{{it}}{% sep %}, {% endfor %} yay", "numbers: [2, 4, 6]\nmorenumbers: [1, 3]", "foo 2, 4, 6, 1, 3 yay");
 }

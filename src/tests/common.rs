@@ -82,7 +82,12 @@ pub fn setup_pipes() -> PipeMap {
     pipemap.insert("test2".to_string(), PipeDefinition::Template(parse_template_string("um3 {{nah}}").unwrap(), 0));
     pipemap.insert("test3".to_string(), PipeDefinition::Template(parse_template_string("um4 {{it}} {{params[0]}} {{params[1]}}").unwrap(), 0));
     pipemap.insert("txt".to_string(), PipeDefinition::Template(parse_template_string("{{it}}.txt").unwrap(), 0));
-    pipemap.insert("testfn".to_string(), PipeDefinition::Fn(|_input, _params, _pipes, _io| Ok(Yaml::String("bleh".to_owned())), 0));
+    pipemap.insert("testfn".to_string(), 
+        PipeDefinition::Fn(|_input, _params, _pipes, _io| Ok(Yaml::String("bleh".to_owned())), 0)
+    );
+    pipemap.insert("testfn2".to_string(), 
+        PipeDefinition::Fn(|_input, _params, _pipes, _io| Ok(Yaml::Array(vec![Yaml::Integer(1), Yaml::Integer(2)])), 0)
+    );
     pipemap
 }
 
