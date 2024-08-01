@@ -288,24 +288,24 @@ impl TemplateElement {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-enum ForIterationType<'a>{
-    Values(&'a TemplateValue, usize),
-    Filenames(&'a str, usize),
-    FileAt(&'a TemplateValue, String, usize),
+pub enum ForIterationType<'a>{
+    Values(&'a TemplateValue),
+    Filenames(&'a str),
+    FileAt(&'a TemplateValue, String),
 }
 
 impl<'a> std::fmt::Display for ForIterationType<'a> {
     fn fmt(&self, ff: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ForIterationType::FileAt(value, filename, size) => write!(ff, "{} of file \"{}\" derived from \"{}\"", size, filename, value),
-            ForIterationType::Filenames(filename, size) => write!(ff, "{} of file \"{}\"", size, filename),
-            ForIterationType::Values(value, size) => write!(ff, "{} of \"{}\"", size, value),
+            ForIterationType::FileAt(value, filename) => write!(ff, "file \"{}\" derived from \"{}\"", filename, value),
+            ForIterationType::Filenames(filename) => write!(ff, "file \"{}\"", filename),
+            ForIterationType::Values(value) => write!(ff, "\"{}\"", value),
         }
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-struct ForIteration<'a>(YamlValue, ForIterationType<'a>);
+struct ForIteration<'a>(YamlValue, ForIterationType<'a>, usize);
 
 fn for_make_iterable<'a>(
     params: & YamlMap,
@@ -316,17 +316,19 @@ fn for_make_iterable<'a>(
     for gg in groupings {
         for value in gg.values.iter() {
             let lookup = lookup_value(&value, params)?;
-            let as_vec = to_iterable(&lookup)?;
+            let location = ForIterationType::Values(&value);
+            let as_vec = to_iterable(&location, &lookup)?;
             for (ind, finalval) in as_vec.into_iter().enumerate() {
-                entries.push(ForIteration(finalval, ForIterationType::Values(&value, ind)));
+                entries.push(ForIteration(finalval, location.clone(), ind));
             }
         }
         for filename in gg.filenames.iter() {
             let lookup = io.read_yaml(&filename)
                 .map_err(|xx| TemplateError::YamlFileError(xx))?;
-            let as_vec = to_iterable(lookup)?;
+            let location= ForIterationType::Filenames(&filename);
+            let as_vec = to_iterable(&location, lookup)?;
             for (ind, finalval) in as_vec.into_iter().enumerate() {
-                entries.push(ForIteration(finalval, ForIterationType::Filenames(&filename, ind)));
+                entries.push(ForIteration(finalval, location.clone(), ind));
             }
         }
         for fileat in gg.files_at.iter() {
@@ -334,9 +336,10 @@ fn for_make_iterable<'a>(
             let filename = tostr(&lookup)?;
             let file = io.read_yaml(&filename)
                 .map_err(|xx| TemplateError::YamlFileError(xx))?;
-            let as_vec = to_iterable(file)?;
+            let location = ForIterationType::FileAt(&fileat, filename.to_owned());
+            let as_vec = to_iterable(&location, file)?;
             for (ind, finalval) in as_vec.into_iter().enumerate() {
-                entries.push(ForIteration(finalval, ForIterationType::FileAt(&fileat, filename.to_owned(), ind)));
+                entries.push(ForIteration(finalval, location.clone(), ind));
             }
         }
     }

@@ -5,7 +5,7 @@ use yaml_rust2::{
     YamlLoader,
 };
 use yaml_rust2::yaml::Yaml::String as YamlString;
-use crate::template::{TemplateError, TemplateValue, TemplateValueAccess};
+use crate::template::{TemplateError, TemplateValue, TemplateValueAccess, ForIterationType};
 use crate::utils::{MaybeRef};
 use crate::io::FileError;
 
@@ -161,10 +161,17 @@ pub fn tostr(value: &Yaml) -> Result<String, TemplateError> {
     }
 }
 
-pub fn to_iterable(value: &Yaml) -> Result<Vec<Yaml>, TemplateError> {
+pub fn to_iterable(path: &ForIterationType, value: &Yaml) -> Result<Vec<Yaml>, TemplateError> {
     match value {
         Yaml::Array(aa) => Ok(aa.to_owned()),
-        _ => Err(TemplateError::ForOnUnindexable("".to_string()))
+        Yaml::Hash(hh) => Ok(
+            hh.iter().map(|ee| {
+                let mut map = new_yaml_map();
+                map.insert(YamlValue::String("key".to_owned()), ee.0.clone());
+                map.insert(YamlValue::String("value".to_owned()), ee.1.clone());
+                YamlValue::Hash(map)
+            }).collect()),
+        _ => Err(TemplateError::ForOnUnindexable(path.to_string()))
     }
 }
 
