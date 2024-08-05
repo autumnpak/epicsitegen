@@ -43,6 +43,10 @@ pub enum TemplateElement {
         separator: Vec<TemplateElement>,
         sort_and_filter: ForSortAndFilter,
     },
+    Into {
+        value: TemplateValue,
+        ast: Vec<TemplateElement>,
+    },
     LookupCatcher(Vec<Vec<TemplateElement>>),
 }
 
@@ -90,6 +94,8 @@ pub enum TemplateError {
     OnForLoopIterationIncludeKey(Box<TemplateError>, String),
     OnForLoopIterationExcludeKey(Box<TemplateError>, String),
     InIfExistsLoop(Box<TemplateError>, TemplateValue, bool),
+    InIntoStatement(Box<TemplateError>, TemplateValue),
+    IntoValueNotHash(TemplateValue),
     KeyNotPresent(String),
     KeyNotString(String),
     ParseError(String),
@@ -135,6 +141,8 @@ impl std::fmt::Display for TemplateError {
             TemplateError::OnForLoopIterationIncludeKey(err, value) => write!(ff, "{}\nwhen getting the include key for loop entry {}", err, value),
             TemplateError::OnForLoopIterationExcludeKey(err, value) => write!(ff, "{}\nwhen getting the exclude key for loop entry {}", err, value),
             TemplateError::InIfExistsLoop(err, value, truthiness) => write!(ff, "{}\nwithin the {} branch of checking if {} exists", err, truthiness, value),
+            TemplateError::InIntoStatement(err, value) => write!(ff, "{}\nwhen params are derived from {}", err, value),
+            TemplateError::IntoValueNotHash(value) => write!(ff, "Can't use {} with an into statement as it's not an object", value),
             TemplateError::KeyNotPresent(strr) => write!(ff, "The key \"{}\" was not present in the parameters.", strr),
             TemplateError::KeyNotString(strr) => write!(ff, "The key \"{}\" in the parameters was not a string.", strr),
             TemplateError::ParseError(strr) => write!(ff, "Parsing the templating text failed: {}", strr),
@@ -208,6 +216,15 @@ impl TemplateElement {
                             .map_err(|ee| TemplateError::InIfExistsLoop(Box::new(ee), value.clone(), false)),
                         _ => Err(ee)
                     }
+                }
+            }
+            TemplateElement::Into{value, ast} => {
+                let lookup = lookup_value(value, params);
+                match lookup {
+                    Ok(YamlValue::Hash(hh)) => render_elements(ast, &hh, pipes, io, context)
+                        .map_err(|ee| TemplateError::InIntoStatement(Box::new(ee), value.clone())),
+                    Ok(_) => Err(TemplateError::IntoValueNotHash(value.clone())),
+                    Err(ee) => Err(TemplateError::InIntoStatement(Box::new(ee), value.clone()))
                 }
             }
             TemplateElement::LookupCatcher(values) => {

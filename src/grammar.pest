@@ -1,7 +1,7 @@
 string_template = _{ SOI ~ ast ~ EOI }
 string_mapping = _{SOI ~ ats ~ EOI}
 ws = _{ (" "|"\t"|"\n"|"\r")+ }
-ast = { (replacement | snippet | file_element | if_exists | for_element | lookup_catcher | plain_text)* }
+ast = { (replacement | snippet | file_element | if_exists | for_element | into_element | lookup_catcher | plain_text)* }
 value = { ident ~ (field | index)* }
 values = { value ~ ws? ~ ("," ~ ws? ~ value ~ ws?)* ~ ("," ~ ws?)? }
 values_with_pipes = { value_with_pipe ~ ("," ~ ws? ~ value_with_pipe)* ~ ("," ~ ws?)? }
@@ -32,6 +32,8 @@ pipe_name = { not_pipe_end+ }
 if_exists = { "{%" ~ ws? ~ "if-exists" ~ ws ~ value ~ ws? ~ "%}" ~ ast ~ if_exists_else? ~ if_exists_end }
 if_exists_else = { "{%" ~ ws? ~ "else" ~ ws? ~ "%}" ~ ws? ~ ast }
 if_exists_end = { "{%" ~ ws? ~ "endif" ~ ws? ~ "%}" }
+into_element = { "{%" ~ ws? ~ "into" ~ ws? ~ value ~ ws? ~ "%}" ~ ws? ~ ast ~ into_end }
+into_end = { "{%" ~ ws? ~ "endinto" ~ ws? ~ "%}" }
 for_element = { "{%" ~ ws? ~ "for" ~ ws ~ ident ~ for_grouping ~ for_sort_and_filter? ~ "%}" ~ ast ~ for_sep? ~ for_end }
 for_grouping = { for_in? ~ ws? ~ for_in_file? ~ ws? ~ for_in_file_at? ~ ws? }
 for_sort_and_filter = { for_sort? ~ ws? ~ for_filters? ~ ws? }

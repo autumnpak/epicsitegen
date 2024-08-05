@@ -1,4 +1,4 @@
-use crate::template::{render, TemplateError, default_template_context};
+use crate::template::{render, TemplateError, default_template_context, TemplateValue};
 use yaml_rust2::{yaml::{Hash,}, YamlLoader};
 use crate::tests::common::{setup_io, setup_pipes};
 
@@ -362,4 +362,14 @@ fn snippet_contents_piped_default() {
 #[test]
 fn snippet_at_contents_piped_default() {
     accept("foopiped {% snippet @ filename $ %} yay", "filename: bbb.txt", "foopiped sbanana yay");
+}
+
+#[test]
+fn into_object() {
+    accept("foo {% into bar %}{{test}}{% endinto %} yay", "bar: \n  test: something", "foo something yay");
+}
+
+#[test]
+fn into_integer() {
+    reject("foo {% into bar %}{{test}}{% endinto %} yay", "bar: 3", TemplateError::IntoValueNotHash(TemplateValue{base: "bar".to_owned(), accesses: vec![]}));
 }
