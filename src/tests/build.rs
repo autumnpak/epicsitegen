@@ -34,7 +34,7 @@ fn params(strr: &str) -> YamlMap {
 }
 
 #[test]
-fn Build_single_page() {
+fn build_single_page() {
     let mut io = setup_io();
     runs(BuildAction::BuildPage{output: "out.txt".to_string(), input: "base01.txt".to_string(), params: params("bar: test")}, &mut io);
     assert_eq!(1, io.written.len());
@@ -42,7 +42,7 @@ fn Build_single_page() {
 }
 
 #[test]
-fn Single_page_context() {
+fn single_page_context() {
     let mut io = setup_io();
     runs(BuildAction::BuildPage{output: "blah/um/out.txt".to_string(), input: "base02.txt".to_string(), params: params("bar: test")}, &mut io);
     assert_eq!(1, io.written.len());
@@ -50,7 +50,7 @@ fn Single_page_context() {
 }
 
 #[test]
-fn Build_no_multiple_pages() {
+fn build_no_multiple_pages() {
     let mut io = setup_io();
     runs(BuildAction::BuildMultiplePages{default_params: params("{}"), on: vec![
         BuildMultiplePages{
@@ -64,7 +64,7 @@ fn Build_no_multiple_pages() {
 }
 
 #[test]
-fn Build_multiple_pages_not_from_files() {
+fn build_multiple_pages_not_from_files() {
     let mut io = setup_io();
     runs(BuildAction::BuildMultiplePages{default_params: params("{}"), on: vec![
         BuildMultiplePages{
@@ -83,7 +83,7 @@ fn Build_multiple_pages_not_from_files() {
 }
 
 #[test]
-fn Build_multiple_pages_mapping() {
+fn build_multiple_pages_mapping() {
     let mut io = setup_io();
     runs(BuildAction::BuildMultiplePages{default_params: params("{}"), on: vec![
         BuildMultiplePages{
@@ -102,7 +102,7 @@ fn Build_multiple_pages_mapping() {
 }
 
 #[test]
-fn Build_multiple_pages_include() {
+fn build_multiple_pages_include() {
     let mut io = setup_io();
     runs(BuildAction::BuildMultiplePages{default_params: params("{}"), on: vec![
         BuildMultiplePages{
@@ -123,7 +123,7 @@ fn Build_multiple_pages_include() {
 }
 
 #[test]
-fn Build_multiple_pages_exclude() {
+fn build_multiple_pages_exclude() {
     let mut io = setup_io();
     runs(BuildAction::BuildMultiplePages{default_params: params("{}"), on: vec![
         BuildMultiplePages{
@@ -144,7 +144,7 @@ fn Build_multiple_pages_exclude() {
 }
 
 #[test]
-fn Build_multiple_pages_includes_exclude() {
+fn build_multiple_pages_includes_exclude() {
     let mut io = setup_io();
     runs(BuildAction::BuildMultiplePages{default_params: params("{}"), on: vec![
         BuildMultiplePages{

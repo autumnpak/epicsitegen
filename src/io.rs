@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use std::fmt;
 use std::io;
-use std::sync::{Mutex, Arc};
+use std::sync::{Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, PartialEq, Eq)]

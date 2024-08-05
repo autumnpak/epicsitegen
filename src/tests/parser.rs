@@ -35,67 +35,67 @@ fn reject(
 }
 
 #[test]
-fn Empty_text() {
+fn empty_text() {
     accept("", "{}", "");
 }
 
 #[test]
-fn Just_plain_text() {
+fn just_plain_text() {
     accept("test test", "{}", "test test");
 }
 
 #[test]
-fn Just_plain_text_with_open_brace() {
+fn just_plain_text_with_open_brace() {
     accept("test { test", "{}", "test { test");
 }
 
 #[test]
-fn Basic_replacement_no_text_after() {
+fn basic_replacement_no_text_after() {
     accept("foo {{bar}}", "bar: test", "foo test");
 }
 
 #[test]
-fn Basic_replacement_text_after() {
+fn basic_replacement_text_after() {
     accept("foo {{bar}} yay", "bar: test", "foo test yay");
 }
 
 #[test]
-fn Basic_replacement_integer() {
+fn basic_replacement_integer() {
     accept("foo {{bar}} yay", "bar: 123", "foo 123 yay");
 }
 
 #[test]
-fn Basic_replacement_real() {
+fn basic_replacement_real() {
     accept("foo {{bar}} yay", "bar: 123.456", "foo 123.456 yay");
 }
 
 #[test]
-fn Basic_replacement_with_spaces() {
+fn basic_replacement_with_spaces() {
     accept("foo {{   bar  }} yay", "bar: test", "foo test yay");
 }
 
 #[test]
-fn Replacement_doesnt_exist() {
+fn replacement_doesnt_exist() {
     reject("foo {{barr}} yay", "bar: 123.456", TemplateError::KeyNotPresent("barr".to_owned()));
 }
 
 #[test]
-fn Replacement_with_field_access() {
+fn replacement_with_field_access() {
     accept("foo {{bar.test}} yay", "bar: \n  test: something", "foo something yay");
 }
 
 #[test]
-fn Missing_field_access() {
+fn missing_field_access() {
     reject("foo {{bar.testt}} yay", "bar: \n  test: something", TemplateError::FieldNotPresent("bar".to_owned(), "testt".to_owned()));
 }
 
 #[test]
-fn Bad_field_access() {
+fn bad_field_access() {
     reject("foo {{bar.test.yayy}} yay", "bar: \n  test: something", TemplateError::FieldOnUnfieldable("bar.test".to_owned(), "yayy".to_owned()));
 }
 
 #[test]
-fn Deeper_bad_field_access() {
+fn deeper_bad_field_access() {
     reject("foo {{bar.test.yayy}} yay", "bar: \n  test:\n    yay: uh", TemplateError::FieldNotPresent("bar.test".to_owned(), "yayy".to_owned()));
 }
 
@@ -115,32 +115,32 @@ fn array_last() {
 }
 
 #[test]
-fn Replacement_with_index_access() {
+fn replacement_with_index_access() {
     accept("foo {{bar[1]}} yay", "bar: [a, b, c, d]", "foo b yay");
 }
 
 #[test]
-fn Replacement_with_index_value_access() {
+fn replacement_with_index_value_access() {
     accept("foo {{bar[at]}} yay", "bar: [a, b, c, d]\nat: 1", "foo b yay");
 }
 
 #[test]
-fn Replacement_with_complex_index_value_access() {
+fn replacement_with_complex_index_value_access() {
     accept("foo {{bar[at.within]}} yay", "bar: [a, b, c, d]\nat:\n  within: 3", "foo d yay");
 }
 
 #[test]
-fn Index_out_of_bounds() {
+fn index_out_of_bounds() {
     reject("foo {{bar[88]}} yay", "bar: [a, b, c, d]", TemplateError::IndexOOB("bar".to_owned(), 88));
 }
 
 #[test]
-fn Indexing_not_on_indexable() {
+fn indexing_not_on_indexable() {
     reject("foo {{bar[0]}} yay", "bar: 1", TemplateError::IndexOnUnindexable("bar".to_owned(), 0));
 }
 
 #[test]
-fn Replacement_with_many_field_accesses() {
+fn replacement_with_many_field_accesses() {
     accept("foo {{bar.test.something.another}} yay", "bar: \n  test:\n    something:\n      another:\n        ok", "foo ok yay");
 }
 

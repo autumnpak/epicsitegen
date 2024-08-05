@@ -3,7 +3,7 @@ use crate::template::{TemplateError, render, render_elements, TemplateContext};
 use crate::pipes::{PipeMap};
 use crate::io::{ReadsFiles, FileError};
 use crate::parsers::{parse_template_string};
-use crate::utils::{map_m_mut, map_m_ref, map_m_index, map_m_ref_index};
+use crate::utils::{map_m_ref, map_m_index, map_m_ref_index};
 use std::path::PathBuf;
 use pathdiff::diff_paths;
 
