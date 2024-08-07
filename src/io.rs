@@ -231,6 +231,14 @@ impl ReadsFiles for FileCache {
     }
 
     fn write(&mut self, filename: &str, contents: &str) -> Result<(), FileError> {
+        match Path::new(filename).parent() {
+            Some(parent) => {
+                if !parent.is_dir() {
+                    fs::create_dir_all(parent);
+                }
+            }
+            _ => {}
+        }
         fs::write(filename, contents).map_err(|_xx| FileError::FileCantBeWritten(filename.to_owned()))
     }
 
