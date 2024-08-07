@@ -10,7 +10,7 @@ use crate::yaml::{
 use crate::parsers::parse_template_string;
 use crate::io::{ReadsFiles, FileError};
 use crate::pipes::{
-    Pipe, PipeMap, execute_pipes, PipeInputSource
+    Pipe, PipeMap, execute_pipes, PipeInputSource, pipe_cache_check, CacheStatus
 };
 
 pub struct TemplateContext {
@@ -164,6 +164,52 @@ impl std::fmt::Display for TemplateError {
     }
 }
 
+fn get_file2<'a>(
+    filename: &'a str,
+    pipes: &'a Vec<Pipe>,
+    params: &'a YamlMap, 
+    pipemap: &'a PipeMap, 
+    io: &mut impl ReadsFiles, 
+    context: &TemplateContext
+) -> Result<String, TemplateError> {
+    match io.read(filename) {
+        Ok(strr) => {
+            let piped = execute_pipes(
+                &YamlValue::String(strr.to_owned()), pipes, params,
+                PipeInputSource::File(filename), pipemap, io, context
+            )?;
+            tostr(&piped)
+        },
+        Err(ee) => Err(TemplateError::FileError(ee))
+    }
+}
+
+fn get_file<'a>(
+    filename: &'a str,
+    pipes: &'a Vec<Pipe>,
+    params: &'a YamlMap, 
+    pipemap: &'a PipeMap, 
+    io: &mut impl ReadsFiles, 
+    context: &TemplateContext
+) -> Result<String, TemplateError> {
+    match pipe_cache_check(filename, pipes, pipemap, io) {
+        CacheStatus::UpToDate(strr) => {
+            match io.read(&strr) {
+                Ok(strr) => { Ok(strr.to_owned()) },
+                Err(ee) => Err(TemplateError::FileError(ee))
+            }
+        },
+        CacheStatus::NeedsUpdate(strr) => {
+            let result = get_file2(filename, pipes, params, pipemap, io, context)?;
+            io.write(&strr, &result).map_err(|ee| TemplateError::FileError(ee))?;
+            Ok(result)
+        },
+        CacheStatus::Uncachable => {
+            get_file2(filename, pipes, params, pipemap, io, context)
+        }
+    }
+}
+
 impl TemplateElement {
     fn render<'a>(&'a self, params: &'a YamlMap, pipes: &'a PipeMap, io: &mut impl ReadsFiles, context: &TemplateContext) -> Result<String, TemplateError> {
         match self {
@@ -175,16 +221,7 @@ impl TemplateElement {
             },
             TemplateElement::File{snippet, filename, pipe} => {
                 let real_filename = format!("{}{}", if *snippet {&context.snippet_folder} else {""}, filename);
-                match io.read(&real_filename) {
-                    Ok(strr) => {
-                        let piped = execute_pipes(
-                            &YamlValue::String(strr.to_owned()), pipe, params,
-                            PipeInputSource::File(&real_filename), pipes, io, context
-                        )?;
-                        tostr(&piped)
-                    },
-                    Err(ee) => Err(TemplateError::FileError(ee))
-                }
+                get_file(&real_filename, pipe, params, pipes, io, context)
             },
             TemplateElement::FileAt{snippet, value, value_pipe, contents_pipe} => {
                 let lookup = lookup_value(value, params)?;
@@ -193,16 +230,7 @@ impl TemplateElement {
                 )?;
                 let filename = tostr(&piped_filename)?;
                 let real_filename = format!("{}{}", if *snippet {&context.snippet_folder} else {""}, filename);
-                match io.read(&real_filename) {
-                    Ok(strr) => {
-                        let piped = execute_pipes(
-                            &YamlValue::String(strr.to_owned()), contents_pipe, params,
-                            PipeInputSource::FileFrom(&real_filename, &value), pipes, io, context
-                        )?;
-                        tostr(&piped)
-                    },
-                    Err(ee) => Err(TemplateError::FileErrorDerivedFrom(ee, value.clone()))
-                }
+                get_file(&real_filename, contents_pipe, params, pipes, io, context)
             }
             TemplateElement::IfExists{value, when_true, when_false} => {
                 let lookup = lookup_value(value, params);

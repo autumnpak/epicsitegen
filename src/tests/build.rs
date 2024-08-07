@@ -50,6 +50,42 @@ fn single_page_context() {
 }
 
 #[test]
+fn build_single_cache_file_is_newest() {
+    let mut io = setup_io();
+    runs(BuildAction::BuildPage{output: "out.txt".to_string(), input: "base05.txt".to_string(), params: params("bar: test")}, &mut io);
+    assert_eq!(2, io.written.len());
+    io.assert_written("cache/aaa.txt__ch1", "ch1 apple");
+    io.assert_written("build/out.txt", "foo ch1 apple yay");
+}
+
+#[test]
+fn build_single_cache_cache_is_newest() {
+    let mut io = setup_io();
+    runs(BuildAction::BuildPage{output: "out.txt".to_string(), input: "base06.txt".to_string(), params: params("bar: test")}, &mut io);
+    assert_eq!(1, io.written.len());
+    io.assert_written("build/out.txt", "foo ch2 apple but cached yay");
+    io.assert_read("cache/aaa.txt__ch2");
+}
+
+#[test]
+fn build_single_cache_pipe_is_newest() {
+    let mut io = setup_io();
+    runs(BuildAction::BuildPage{output: "out.txt".to_string(), input: "base07.txt".to_string(), params: params("bar: test")}, &mut io);
+    assert_eq!(2, io.written.len());
+    io.assert_written("cache/aaa.txt__ch3", "ch3 apple");
+    io.assert_written("build/out.txt", "foo ch3 apple yay");
+}
+
+#[test]
+fn build_single_cache_doesnt_exist() {
+    let mut io = setup_io();
+    runs(BuildAction::BuildPage{output: "out.txt".to_string(), input: "base08.txt".to_string(), params: params("bar: test")}, &mut io);
+    assert_eq!(2, io.written.len());
+    io.assert_written("cache/aaa.txt__ch4", "ch4 apple");
+    io.assert_written("build/out.txt", "foo ch4 apple yay");
+}
+
+#[test]
 fn build_no_multiple_pages() {
     let mut io = setup_io();
     runs(BuildAction::BuildMultiplePages{default_params: params("{}"), on: vec![

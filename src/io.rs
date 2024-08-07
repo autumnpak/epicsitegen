@@ -35,6 +35,7 @@ impl std::fmt::Display for FileError {
 
 pub trait ReadsFiles {
     fn read(&mut self, filename: &str) -> Result<&str, FileError>;
+    fn modify_time(&self, filename: &str) -> Option<u128>;
     fn write(&mut self, filename: &str, contents: &str) -> Result<(), FileError>;
     fn read_yaml(&mut self, filename: &str) -> Result<&YamlValue, YamlFileError>;
     fn read_template(&mut self, filename: &str) -> Result<&Vec<TemplateElement>, FileError>;
@@ -70,6 +71,13 @@ impl ReadsFiles for ThreadsafeFileCache {
     fn read(&mut self, filename: &str) -> Result<&str, FileError> {
         let lock = self.mutex.lock().unwrap();
         let res = self.fc.read(filename);
+        drop(lock);
+        res
+    }
+
+    fn modify_time(&self, filename: &str) -> Option<u128> {
+        let lock = self.mutex.lock().unwrap();
+        let res = self.fc.modify_time(filename);
         drop(lock);
         res
     }
@@ -130,6 +138,13 @@ fn read_file(filename: &str) -> Result<String, FileError> {
     }
 }
 
+pub fn get_real_file_modify_time(filename: &str) -> Option<u128> {
+    let metadata = fs::metadata(filename).ok()?;
+    let modify = metadata.modified().ok()?;
+    let duration = modify.duration_since(UNIX_EPOCH).ok()?;
+    Some(duration.as_millis())
+}
+
 impl ReadsFiles for FileCache {
     fn read(&mut self, filename: &str) -> Result<&str, FileError> {
         let got = match self.files.entry(filename.to_owned()) {
@@ -153,6 +168,10 @@ impl ReadsFiles for FileCache {
             },
         };
         Ok(&got.1)
+    }
+
+    fn modify_time(&self, filename: &str) -> Option<u128> {
+        get_real_file_modify_time(filename)
     }
 
     fn read_yaml(&mut self, filename: &str) -> Result<&YamlValue, YamlFileError> {

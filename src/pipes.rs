@@ -4,7 +4,7 @@ use crate::yaml::{
     new_yaml_map,
     tostr
 };
-use crate::io::{ReadsFiles, ReadsFilesImpl};
+use crate::io::{ReadsFiles, ReadsFilesImpl, get_real_file_modify_time};
 use crate::template::{
     TemplateElement, TemplateError, render, render_elements, TemplateValue, TemplateContext
 };
@@ -17,14 +17,14 @@ pub enum Pipe {
 }
 
 pub enum PipeDefinition {
-    Template(Vec<TemplateElement>, u128),
+    Template(Vec<TemplateElement>, Option<u128>),
     Fn(
         fn(
             &YamlValue,
             &Vec<String>,
             &PipeMap,
             &ReadsFilesImpl,
-        ) -> Result<YamlValue, String>, u128
+        ) -> Result<YamlValue, String>, Option<u128>
     )
 }
 
@@ -41,6 +41,83 @@ impl<'a> std::fmt::Display for PipeInputSource<'a> {
             PipeInputSource::File(strr) => write!(ff, "the file \"{}\"", strr),
             PipeInputSource::FileFrom(strr, val) => write!(ff, "the file \"{}\" from \"{}\"", strr, val),
         }
+    }
+}
+
+fn pipe_cache_check_filename<'a>(
+    filename: &str, 
+    pipes: &Vec<Pipe>,
+) -> Option<String> {
+    let rep = filename.replace("/", "-");
+    let mut namevec: Vec<&str> = vec![&rep];
+    let two = "__";
+    let one = "_";
+    for pp in pipes {
+        match pp {
+            Pipe::Named{name, params} => {
+                namevec.push(two);
+                namevec.push(name);
+                for par in params {
+                    namevec.push(one);
+                    namevec.push(par)
+                }
+            }
+            Pipe::Template => {
+                return None;
+                //namevec.push(two);
+                //namevec.push("template");
+            }
+        }
+    }
+    let path = namevec.join("");
+    let fullpath = ["cache/", &path].join("");
+    Some(fullpath)
+}
+
+pub enum CacheStatus {
+    Uncachable,
+    UpToDate(String),
+    NeedsUpdate(String)
+}
+
+pub fn pipe_cache_check<'a>(
+    filename: &str, 
+    pipes: &Vec<Pipe>,
+    pipemap: &'a PipeMap,
+    io: &impl ReadsFiles,
+) -> CacheStatus {
+    if pipes.len() == 0 { return CacheStatus::Uncachable };
+    match pipe_cache_check_filename(filename, pipes) {
+        Some(fullname) => {
+            match io.modify_time(&fullname) {
+                Some(modify) => {
+                    let mut max: u128 = io.modify_time(&filename).unwrap_or(0);
+                    for pp in pipes {
+                        match pp {
+                            Pipe::Named{name, ..} => {
+                                match pipemap.get(name) {
+                                    Some(PipeDefinition::Template(_, time)) => {
+                                        if let Some(tt) = time {
+                                            max = if max > *tt {max} else {*tt}
+                                        } else { return CacheStatus::Uncachable }
+                                    },
+                                    Some(PipeDefinition::Fn(_, time)) => {
+                                        if let Some(tt) = time {
+                                            max = if max > *tt {max} else {*tt}
+                                        } else { return CacheStatus::Uncachable }
+                                    }
+                                    None => { return CacheStatus::Uncachable},
+                                }
+                            }
+                            _ => unreachable!()
+                        }
+                    }
+                    if modify < max {CacheStatus::NeedsUpdate(fullname)} else {CacheStatus::UpToDate(fullname)}
+                }
+                None => { CacheStatus::NeedsUpdate(fullname)}
+            }
+        }
+        None => {CacheStatus::Uncachable}
     }
 }
 
