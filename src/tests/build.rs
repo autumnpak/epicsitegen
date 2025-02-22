@@ -200,7 +200,7 @@ fn build_multiple_pages_includes_exclude() {
 }
 
 #[test]
-fn build_multiple_pages_flatten() {
+fn build_multiple_pages_flatten_array() {
     let mut io = setup_io();
     runs(BuildAction::BuildMultiplePages{default_params: params("{}"), on: vec![
         BuildMultiplePages{
@@ -216,4 +216,23 @@ fn build_multiple_pages_flatten() {
     io.assert_written("build/out99.txt", "0 99\n---\n- 99\n- 88\n- 77");
     io.assert_written("build/out88.txt", "1 88\n---\n- 99\n- 88\n- 77");
     io.assert_written("build/out77.txt", "2 77\n---\n- 99\n- 88\n- 77");
+}
+
+#[test]
+fn build_multiple_pages_flatten_object() {
+    let mut io = setup_io();
+    runs(BuildAction::BuildMultiplePages{default_params: params("{}"), on: vec![
+        BuildMultiplePages{
+            mapping: params("{output: \"out{{flat.value}}.txt\"}"),
+            files: vec![],
+            params: vec![
+                params("input: base04.txt\nbar: test\nflat: {one: 99, two: 88, three: 77}"),
+            ],
+            flatten: Some("flat".to_owned()),
+        },
+    ], descriptor: "uh".to_owned(), include: None, exclude: None}, &mut io);
+    assert_eq!(3, io.written.len());
+    io.assert_written("build/out99.txt", "0 ---\nkey: one\nvalue: 99\n---\none: 99\ntwo: 88\nthree: 77");
+    io.assert_written("build/out88.txt", "1 ---\nkey: two\nvalue: 88\n---\none: 99\ntwo: 88\nthree: 77");
+    io.assert_written("build/out77.txt", "2 ---\nkey: three\nvalue: 77\n---\none: 99\ntwo: 88\nthree: 77");
 }

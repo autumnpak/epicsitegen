@@ -91,6 +91,7 @@ pub fn setup_io() -> TestFileCache {
     files.insert("base06.txt".to_string(), "foo {%file aaa.txt | ch2%} yay".to_string());
     files.insert("base07.txt".to_string(), "foo {%file aaa.txt | ch3%} yay".to_string());
     files.insert("base08.txt".to_string(), "foo {%file aaa.txt | ch4%} yay".to_string());
+    files.insert("flatten_object_unused.txt".to_string(), "{{_flatten_index}} {{flat.value}}\n{{_flatten_array}}".to_string());
     files.insert("cache/aaa.txt__ch1".to_string(), "ch1 apple but cached".to_string());
     files.insert("cache/aaa.txt__ch2".to_string(), "ch2 apple but cached".to_string());
     files.insert("cache/aaa.txt__ch3".to_string(), "ch3 apple but cached".to_string());

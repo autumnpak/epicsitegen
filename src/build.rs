@@ -1,5 +1,5 @@
-use crate::yaml::{YamlMap, YamlValue, YamlFileError, lookup_str_from_yaml_map, lookup_yaml};
-use crate::template::{TemplateError, render, render_elements, TemplateContext};
+use crate::yaml::{YamlMap, YamlValue, YamlFileError, lookup_str_from_yaml_map, lookup_yaml, to_iterable};
+use crate::template::{TemplateError, render, render_elements, TemplateContext, TemplateValue, ForIterationType};
 use crate::pipes::{PipeMap};
 use crate::io::{ReadsFiles, FileError};
 use crate::parsers::{parse_template_string};
@@ -234,16 +234,21 @@ fn build_multiple_pages_map_params(
         params.extend(ii.params);
         let flattened = if let Some(flat) = &ii.flatten { 
             match lookup_yaml(&flat, &params) {
-                Ok(fullarray @ YamlValue::Array(aa)) => Ok(aa.iter().enumerate().map(|(ind, flatarr)| {
-                    let mut newparams = params.clone();
-                    newparams.insert(YamlValue::String("_flatten_array".to_owned()), fullarray.clone());
-                    newparams.insert(YamlValue::String("_flatten_index".to_owned()), YamlValue::Integer(ind as i64));
-                    newparams.insert(YamlValue::String(flat.to_owned()), flatarr.clone());
-                    let mut new_source = ii.source.to_owned();
-                    new_source.flatten_index = Some(ind);
-                    (newparams, new_source)
-                }).collect()),
-                Ok(..) => Err(BuildError::FlattenOnNonArray(flat.to_owned(), ii.source.to_owned())),
+                Ok(rawvalue) => {
+                    let templateval = TemplateValue { base: flat.to_owned(), accesses: vec![] };
+                    match to_iterable(&ForIterationType::Values(&templateval), rawvalue) {
+                        Ok(aa) => Ok(aa.iter().enumerate().map(|(ind, flatarr)| {
+                            let mut newparams = params.clone();
+                            newparams.insert(YamlValue::String("_flatten_array".to_owned()), rawvalue.clone());
+                            newparams.insert(YamlValue::String("_flatten_index".to_owned()), YamlValue::Integer(ind as i64));
+                            newparams.insert(YamlValue::String(flat.to_owned()), flatarr.clone());
+                            let mut new_source = ii.source.to_owned();
+                            new_source.flatten_index = Some(ind);
+                            (newparams, new_source)
+                        }).collect()),
+                        Err(..) => Err(BuildError::FlattenOnNonArray(flat.to_owned(), ii.source.to_owned())),
+                    }
+                },
                 Err(..) => if &ii.flatten == include { Ok(Vec::new()) } else { Err(BuildError::FlattenKeyNotFound(flat.to_owned(), ii.source.to_owned())) },
             }
         } else { Ok(vec![(params, ii.source)]) }?;
