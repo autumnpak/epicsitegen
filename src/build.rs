@@ -5,6 +5,7 @@ use crate::io::{ReadsFiles, FileError};
 use crate::parsers::{parse_template_string};
 use crate::utils::{map_m_ref, map_m_index, map_m_ref_index};
 use std::path::PathBuf;
+use std::time::Instant;
 use pathdiff::diff_paths;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -142,7 +143,7 @@ impl BuildAction {
 }
 
 impl BuildActionExpanded {
-    pub fn run(&self, pipes: &PipeMap, io: &mut impl ReadsFiles, context: &TemplateContext) -> Result<(), BuildError> {
+    pub fn run(&self, pipes: &PipeMap, io: &mut impl ReadsFiles, context: &TemplateContext, _indent: usize) -> Result<(), BuildError> {
         match self {
             BuildActionExpanded::BuildPage{output, input, params, source} => {
                 build_page(&input, &output, params, pipes, io, context)
@@ -152,6 +153,11 @@ impl BuildActionExpanded {
                 io.copy_files(from, to).map_err(|ee| BuildError::FileError(ee))
             },
         }
+    }
+
+    pub fn run_timed(&self, pipes: &PipeMap, io: &mut impl ReadsFiles, context: &TemplateContext, indent: usize, print: fn(&BuildActionExpanded, Instant, usize, Result<(), BuildError>))  {
+        let start = Instant::now();
+        print(self, start, indent, self.run(pipes, io, context, indent))
     }
 
     pub fn message_run_succeeded(&self, time: u128) -> String {

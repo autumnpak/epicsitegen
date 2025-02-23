@@ -15,7 +15,7 @@ fn runs(
         Err(BuildError::TemplateError(TemplateError::ParseError(ref ee))) => println!("{}", ee),
         _ => ()
     };
-    let render = match map_m(expanded.unwrap(), |ii| {ii.run(&setup_pipes(), io, &default_template_context())}) {
+    let render = match map_m(expanded.unwrap(), |ii| {ii.run(&setup_pipes(), io, &default_template_context(), 0)}) {
         Err(BuildError::TemplateError(TemplateError::ParseError(ref ee))) => {
             println!("{}", ee);
             Err(BuildError::TemplateError(TemplateError::ParseError(ee.to_owned())))
